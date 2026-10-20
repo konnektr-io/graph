@@ -1,156 +1,164 @@
 ---
-title: "Import Jobs"
+title: Import Jobs
 icon: Upload
-description: "How to use import jobs for bulk data ingestion with SAS tokens and cloud storage."
+description: Bulk-ingest models, twins and relationships from cloud storage with resumable background jobs.
 ---
 
-Import jobs allow you to bulk ingest data into Konnektr Graph using cloud storage blobs. This guide explains how import jobs work, how to use SAS tokens for Azure Blob Storage, and outlines future support for AWS S3 and Google Cloud Storage.
+Import jobs bulk-ingest graph data from a blob in cloud storage. The job runs in the
+background, reports progress, and resumes from a checkpoint if the API restarts — so a
+million-line import does not depend on a single HTTP request staying open.
 
-## Overview
+This page covers what you need to *use* jobs. The configuration keys live in the
+[configuration reference](../reference/configuration).
 
-An import job is a background process that reads data from an input blob (e.g., NDJSON, CSV) and writes results to an output blob. This is useful for bulk loading twins, relationships, or telemetry data.
+## When to use an import job
 
-## Supported Storage Providers
+- Loading an existing dataset (an ADT export, a dump, a generated ontology).
+- Anything larger than a single batch request: `POST /digitaltwins` and `POST /relationships`
+  are capped by `Parameters:MaxBatchSize` (default 2000) and reject larger payloads with 400.
+- Work that must survive a pod restart — the job, not your shell, owns the progress.
 
-- **Azure Blob Storage (SAS tokens)**: Supported — pass a blob URI that carries the SAS token.
-- **Managed Identity (Azure)**: Supported when the API pod runs with an Azure workload identity.
-- **AWS S3**: Supported via S3 URIs and default AWS credentials or pre-signed URLs.
-- **Google Cloud Storage**: Supported via GCS URIs and default GCP credentials or signed URLs.
+## Supported storage
 
-## Using Azure Blob Storage (SAS Tokens)
+| Provider | URI form | Credentials |
+|---|---|---|
+| Azure Blob Storage | `https://<account>.blob.core.windows.net/<container>/<blob>?sv=…&sig=…` | SAS token in the query string, or managed identity |
+| AWS S3 | `s3://bucket/key` or `https://bucket.s3.amazonaws.com/key` | Default AWS credential chain, or a pre-signed URL |
+| Google Cloud Storage | `gs://bucket/key` or `https://storage.googleapis.com/bucket/key` | Default GCP credentials, or a signed URL |
 
-SAS tokens let import jobs read and write Azure Blob Storage without any Azure credential on the service. SAS tokens grant temporary, scoped access to blobs.
+Input needs **read**; output needs **write**. For Azure SAS that means `sp=r` and `sp=w`; for
+S3/GCS it means your IAM/service-account policy allows the calls.
 
-**Example Blob URI:**
-```
-https://<account>.blob.core.windows.net/<container>/<blob>?sv=...&sig=...
-```
+When the URI carries a SAS token or a pre-signed URL, the service needs no cloud credential at
+all.
 
-- The SAS token must be included in the URI query string.
-- Both input and output blob URIs must be accessible with the provided SAS token.
-- The SAS token must grant **read** permission for input blobs and **write** permission for output blobs (use `sp=r` and/or `sp=w` in the SAS token).
-- When the URI carries a SAS token, no Azure credentials or managed identity are needed.
+## Starting a job
 
-## Using AWS S3
-
-Import jobs support AWS S3 URIs. You can use either the S3 URI format or HTTPS format:
-
-**Example S3 URIs:**
-```
-s3://my-bucket/my-object.ndjson
-https://my-bucket.s3.amazonaws.com/my-object.ndjson
-```
-
-- The application uses default AWS credentials (IAM role, environment variables, or AWS config).
-- You may also use pre-signed URLs for temporary access.
-- The credentials or signed URL must grant **read** permission for input blobs and **write** permission for output blobs.
-- For append/resume, the service downloads the existing object, appends new data, and re-uploads.
-
-## Using Google Cloud Storage
-
-Import jobs support Google Cloud Storage URIs. You can use either the GCS URI format or HTTPS format:
-
-**Example GCS URIs:**
-```
-gs://my-bucket/my-object.ndjson
-https://storage.googleapis.com/my-bucket/my-object.ndjson
+```bash
+curl -X PUT http://localhost:8080/jobs/imports/import-2026-10-20 \
+  -H 'Content-Type: application/json' \
+  -d '{
+        "inputBlobUri":  "https://acct.blob.core.windows.net/data/export.ndjson?sv=...&sp=r&sig=...",
+        "outputBlobUri": "https://acct.blob.core.windows.net/data/export.result.ndjson?sv=...&sp=w&sig=..."
+      }'
 ```
 
-- The application uses default GCP credentials (service account, environment variables, or GCP config).
-- You may also use signed URLs for temporary access.
-- The credentials or signed URL must grant **read** permission for input blobs and **write** permission for output blobs.
-- For append/resume, the service downloads the existing object, appends new data, and re-uploads.
+The call returns `201` immediately; execution is in the background. The job id is yours — reuse
+it and you overwrite that job's record rather than creating a second one.
 
-## How Import Jobs Work
+| Method | Route | Purpose |
+|---|---|---|
+| `PUT` | `/jobs/imports/{id}` | Create and start (body: `inputBlobUri`, `outputBlobUri`) |
+| `GET` | `/jobs/imports/{id}` | Status, counters and errors |
+| `GET` | `/jobs/imports` | List jobs |
+| `POST` | `/jobs/imports/{id}/cancel` | Request cancellation (valid while `Notstarted`/`Running`) |
+| `POST` | `/jobs/imports/{id}/resume` | Resume from the last checkpoint (valid while `Running`/`Failed`, and not locked elsewhere) |
+| `DELETE` | `/jobs/imports/{id}` | Delete the job record |
 
-1. **Create an import job** via the API, providing:
-   - `inputBlobUri`: The source blob URI (with SAS token, AWS credentials, or GCP credentials/signed URL).
-   - `outputBlobUri`: The destination blob URI (with SAS token, AWS credentials, or GCP credentials/signed URL).
-   - Additional job parameters as needed.
-2. The job runs in the background, reading from the input blob and writing results to the output blob.
-3. You can monitor job status, cancel, or resume jobs via the API. For S3 and GCS, resuming a job will append to the existing output object.
+## The input format
 
-## Required Permissions
+NDJSON only — one JSON object per line, no embedded newlines, sections in a fixed order:
 
-
-For all providers, you must ensure that:
-
-- **Input blob**: The credentials, SAS token, or signed URL must grant **read** access.
-- **Output blob**: The credentials, SAS token, or signed URL must grant **write** access.
-- For Azure SAS tokens, use the `sp=r` (read) and/or `sp=w` (write) permissions.
-- For AWS and GCS, ensure your IAM/service account policies allow the required operations.
-
-## NDJSON Format Requirements
-
-Import jobs require NDJSON files with a specific structure. Each section must be a line-delimited JSON object, in the following order:
-
-```
+```jsonl
 {"Section": "Header"}
-{"fileVersion": "1.0.0", "author": "your-name", "organization": "your-org"}
+{"fileVersion": "1.0.0"}
 {"Section": "Models"}
 <DTDL model JSON, one per line>
 {"Section": "Twins"}
-<Twin JSON, one per line>
+<twin JSON, one per line>
 {"Section": "Relationships"}
-<Relationship JSON, one per line>
+<relationship JSON, one per line>
 ```
 
-**Formatting Guidelines:**
-- All objects must be valid JSON and single-line (no embedded newlines).
-- The header section is required and should include metadata.
-- Models, twins, and relationships sections are optional but must follow the order above.
-- See the [Migration Guide](./migration-guide) for more details and code samples.
+Rules the validator actually enforces:
 
-### Example NDJSON Generator (.NET)
+- The `Header` section is **required** and must be first.
+- `fileVersion` must be exactly `"1.0.0"`.
+- `Models`, `Twins` and `Relationships` are optional, but appear in that order.
+- Every object must be valid JSON on a single line.
+
+Models are processed as one unit (they can reference each other through inheritance), while
+twins and relationships are batched.
+
+JSON-LD and other formats are not supported.
+
+### Generating the file
 
 ```python title="ndjson_generator.py"
 import json
 
-def write_ndjson(models, twins, relationships, file_path, header=None):
-   with open(file_path, 'w', encoding='utf-8') as f:
-      # Header section
-      f.write(json.dumps({"Section": "Header"}) + '\n')
-      if header is None:
-         header_obj = {"fileVersion": "1.0.0", "author": "authorName", "organization": "organization"}
-      else:
-         header_obj = header
-      f.write(json.dumps(header_obj) + '\n')
+def write_ndjson(models, twins, relationships, path, header=None):
+    header_obj = header or {
+        "fileVersion": "1.0.0",
+        "author": "authorName",
+        "organization": "organization",
+    }
+    with open(path, "w", encoding="utf-8") as f:
+        # Header is mandatory and must come first
+        f.write(json.dumps({"Section": "Header"}) + "\n")
+        f.write(json.dumps(header_obj) + "\n")
 
-      # Models section
-      f.write(json.dumps({"Section": "Models"}) + '\n')
-      for model in models:
-         # model should be a dict or already serialized string
-         if isinstance(model, str):
-            f.write(model.strip().replace('\n', '') + '\n')
-         else:
-            f.write(json.dumps(model) + '\n')
+        f.write(json.dumps({"Section": "Models"}) + "\n")
+        for model in models:
+            # models are often handed over as already-serialized JSON
+            line = model.strip().replace("\n", "") if isinstance(model, str) else json.dumps(model)
+            f.write(line + "\n")
 
-      # Twins section
-      f.write(json.dumps({"Section": "Twins"}) + '\n')
-      for twin in twins:
-         f.write(json.dumps(twin) + '\n')
+        f.write(json.dumps({"Section": "Twins"}) + "\n")
+        for twin in twins:
+            f.write(json.dumps(twin) + "\n")
 
-      # Relationships section
-      f.write(json.dumps({"Section": "Relationships"}) + '\n')
-      for rel in relationships:
-         f.write(json.dumps(rel) + '\n')
+        f.write(json.dumps({"Section": "Relationships"}) + "\n")
+        for rel in relationships:
+            f.write(json.dumps(rel) + "\n")
 ```
-This function writes the NDJSON file in the required format. Pass lists of models, twins, and relationships as Python dicts or JSON strings. Each object is written on a single line.
 
-**Note:** Only NDJSON format is supported for import jobs. Do not use JSON-LD or other formats.
+## Statuses
 
----
+| Status | Meaning |
+|---|---|
+| `Notstarted` | Created, not picked up yet |
+| `Running` | Reading the input stream |
+| `Succeeded` | Everything imported |
+| `PartiallySucceeded` | Finished, with items that failed — see the errors |
+| `Failed` | Nothing imported, or the job gave up |
+| `Cancelling` | Cancellation requested; the worker has not stopped yet |
+| `Cancelled` | Stopped |
 
-## Future Support
+Two behaviours worth designing around:
 
-- Additional cloud providers and custom storage endpoints may be supported in future releases.
+- **Cancellation is cooperative.** `cancel` sets `Cancelling`; the worker checks it on a
+  heartbeat, so expect a short delay before `Cancelled`.
+- **A lost database connection does not fail the job.** It stays `Running` with no finish time
+  and is picked up again later — from its last checkpoint.
 
-## Notes
+## Resumption
 
-- You may use managed identity for Azure Blob Storage if your environment supports it.
-- All blob URIs must be valid and accessible from the Konnektr Graph instance.
-- See the [API Reference](../reference/api) for endpoint details and request formats.
+Progress is checkpointed at section boundaries and every `Parameters:DefaultCheckpointInterval`
+items (default 50). On resume, the job seeks back to the recorded line and continues; sections
+that already completed are skipped outright.
 
----
+An interrupted job is recovered automatically: the service polls for `Running` jobs whose lock
+is free or expired (every two minutes) and resumes them. You only need `resume` when you want
+to drive that decision yourself — for example after fixing a bad input line, where the job is
+`Failed`.
 
-For questions or troubleshooting, see [How-To Guides](./) or reach out via GitHub Discussions.
+For S3 and GCS, resuming appends to the existing output object rather than replacing it.
+
+## Permissions
+
+| Blob | Needs |
+|---|---|
+| Input | read |
+| Output | write |
+
+Azure: `sp=r` for input, `sp=w` for output. AWS/GCP: the corresponding IAM or service-account
+permissions. All URIs must be reachable from the Konnektr Graph instance — a URI that works on
+your laptop but not inside the cluster is the most common cause of an immediately failed job.
+
+## See also
+
+- [API reference](../reference/api/import-jobs/ListImportJobs) — one page per endpoint
+- [Configuration reference](../reference/configuration) — `JobsEnabled`, `DefaultBatchSize`,
+  `DefaultCheckpointInterval`
+- [Migration guide](./migration-guide) — exporting from Azure Digital Twins into this format
