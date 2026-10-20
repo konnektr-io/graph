@@ -18,8 +18,8 @@ The Konnektr Platform is divided into two distinct logical planes:
 
 **Data Plane (Products: Graph, Flow, Assembler, Compass)**
 
-- User-facing products for building and running digital twin solutions
-- Tenants of the Control Plane
+- User-facing products for building and running semantic graph applications
+- Tenants of the Control Plane when deployed as part of a platform
 - Focus on domain-specific functionality
 
 ## 📋 Guiding Principles

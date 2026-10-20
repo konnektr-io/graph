@@ -257,7 +257,7 @@ public class AdtQueryToCypherTests
         "SELECT T.$metadata.$model FROM DIGITALTWINS T",
         "MATCH (T:Twin) RETURN T['$metadata']['$model']"
     )]
-    // https://github.com/konnektr-io/pg-age-digitaltwins/issues/118 — the two-argument
+    // https://github.com/konnektr-io/graph/issues/118 — the two-argument
     // IS_OF_MODEL(twin, 'model') form was translated with the twin collection as the model id
     // (is_of_model(T,T)), a predicate that matches no twin and returns an empty result set.
     [InlineData(

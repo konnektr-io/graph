@@ -845,7 +845,7 @@ public class ModelsTests : TestBase
     [Fact]
     public async Task CreateModels_ReferencedNestedSchemas_ResolveViaDtdlParser()
     {
-        // Hypothesis test for konnektr-io/pg-age-digitaltwins#98.
+        // Hypothesis test for konnektr-io/graph#98.
         // DTDL requires non-interface schemas (Enum/Object) to be declared in the SAME
         // Interface's `schemas` property and referenced by DTMI. This test verifies the
         // DTDL parser resolves those references from the interface document itself — so

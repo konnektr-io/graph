@@ -11,14 +11,14 @@ This allows an AI to directly query, create, update, and manage your digital twi
 
 ## Endpoint and Connection
 
-The shared MCP server is a single endpoint for all Konnektr Graph instances. You specify which graph instance you want to connect to by using the `resource_id` query parameter.
+The MCP server runs as a separate service next to the API and is reachable at the host you expose it on. You select which graph it serves with the `resource_id` query parameter.
 
 **Endpoint URL:**
 ```
-https://mcp.graph.konnektr.io/mcp?resource_id={your-resource-id}
+http://<your-mcp-host>/mcp?resource_id=<resource-id>
 ```
 
-- **`{your-resource-id}`**: The unique identifier for your Konnektr Graph instance.
+- **`<resource-id>`**: The identifier for the Konnektr Graph instance the MCP server serves.
 - **Transport**: The server supports `http_stream` (also known as Server-Sent Events or SSE).
 
 ## Authentication
@@ -40,7 +40,7 @@ Here is an example of how to configure a compatible MCP client, such as Claude D
   "mcpServers": {
     "konnektr": {
       "command": "npx",
-      "args": ["-y", "mcp-remote", "https://mcp.graph.konnektr.io/mcp?resource_id=your-resource-id"]
+      "args": ["-y", "mcp-remote", "http://<your-mcp-host>/mcp?resource_id=<resource-id>"]
     }
   }
 }
@@ -52,7 +52,7 @@ The client only needs to know the URL and that the authentication type is `oauth
 To add the Konnektr Graph MCP server to your Claude CLI, use the following command:
 
 ```bash
-claude mcp add konnektr --transport http https://mcp.graph.konnektr.io/mcp?resource_id=your-resource-id
+claude mcp add konnektr --transport http http://<your-mcp-host>/mcp?resource_id=<resource-id>
 ```
 
 This command sets up the connection named `konnektr` using HTTP transport to the specified MCP endpoint.
@@ -62,7 +62,7 @@ This command sets up the connection named `konnektr` using HTTP transport to the
 For Gemini CLI, you can add the MCP server with a similar command:
 
 ```bash
-gemini mcp add konnektr --transport http https://mcp.graph.konnektr.io/mcp?resource_id=your-resource-id
+gemini mcp add konnektr --transport http http://<your-mcp-host>/mcp?resource_id=<resource-id>
 ```
 
 ## Available Tools

@@ -679,7 +679,7 @@ public class QueryTests : TestBase
     }
 
     /// <summary>
-    /// Regression test for https://github.com/konnektr-io/pg-age-digitaltwins/issues/118.
+    /// Regression test for https://github.com/konnektr-io/graph/issues/118.
     /// <para>
     /// The two-argument <c>IS_OF_MODEL(twin, 'model')</c> form — valid ADT SQL, and the form used in
     /// Microsoft's own examples — was translated with the twin collection argument as the model id
@@ -2660,7 +2660,7 @@ RETURN t";
     }
 
     /// <summary>
-    /// Regression test for https://github.com/konnektr-io/pg-age-digitaltwins/issues/101.
+    /// Regression test for https://github.com/konnektr-io/graph/issues/101.
     /// <para>
     /// Filtering twins with <c>is_of_model(twin, model)</c> for a model that matches no twin used
     /// to be pathologically slow: for every candidate twin the PL/pgSQL function ran the legacy

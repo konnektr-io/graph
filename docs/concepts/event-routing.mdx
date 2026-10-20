@@ -111,160 +111,122 @@ See the [NATS Event Sink](/docs/graph/guides/event-sinks/nats) reference for ful
 
 ## Configuration
 
-### Managed (Konnektr Cloud)
+### Helm Values
 
-Configure event routing through the Konnektr platform web interface.
-
-#### Step 1: Define Event Sinks
-
-1. Navigate to your Graph instance in ktrlplane
-2. Go to **Settings** > **Event Sinks**
-3. Click **Add Sink** and choose destination type
-4. Fill in connection details:
-   - **Kafka**: Broker list, topic, SASL credentials (username/password or OAuth)
-   - **Azure Data Explorer**: Ingestion URI, database name, service principal credentials
-   - **MQTT**: Broker address, port, credentials
-   - **Webhook**: Endpoint URL, authentication (Basic, Bearer, API Key, OAuth)
-   - **NATS**: Server URL, subject, authentication (token, username/password, or OAuth)
-5. Save the configuration
-
-Credentials are stored securely and never exposed in logs or UI.
-
-![Event Sink Configuration](./event-sink-config.png "Screenshot of Portal Event Sinks tab showing an example Event Sink configuration")
-
-#### Step 2: Configure Event Routes
-
-1. Go to **Settings** > **Event Routes**
-2. Click **Add Route**
-3. Configure the route:
-   - **Event Format**: Choose `EventNotification` (real-time) or `DataHistory` (historical)
-   - **Destination Sink**: Select a configured sink
-   - Optionally add filters (coming soon)
-4. Save and activate
-
-You can create multiple routes to the same sink with different formats. For example:
-- Route 1: `EventNotification` format → KafkaSink (for real-time monitoring)
-- Route 2: `DataHistory` format → KafkaSink (for archival processing)
-
-Events matching your routes will immediately start flowing to configured destinations.
-
-
-![Event Route Configuration](./event-route-config.png "Screenshot of Portal Event Routes tab showing an example Event Route configuration")
-
-
-### Self-Hosted (Kubernetes / Helm)
-
-For self-hosted deployments, configure event routing in your Helm chart `values.yaml`:
+Configure event routing in your Helm chart `values.yaml`:
 
 ```yaml
-config:
-  # Define event sinks
-  eventSinks:
-    kafka:
-      - name: KafkaSink1
-        brokerList: "kafka.example.com:9092"
-        topic: "graph-events"
-        saslMechanism: "PLAIN"  # or OAUTHBEARER
-        saslPassword:
-          valueFrom:
-            secretKeyRef:
-              name: kafka-credentials
-              key: password
+events:
+  enabled: true
+  config:
+    # Define event sinks
+    eventSinks:
+      kafka:
+        - name: KafkaSink1
+          brokerList: "kafka.example.com:9092"
+          topic: "graph-events"
+          saslMechanism: "PLAIN"  # or OAUTHBEARER
+          saslPassword:
+            valueFrom:
+              secretKeyRef:
+                name: kafka-credentials
+                key: password
     
-    kusto:
-      - name: AdxSink1
-        ingestionUri: "https://ingest-cluster.region.kusto.windows.net"
-        database: "GraphHistory"
-        clientId:
-          valueFrom:
-            secretKeyRef:
-              name: azure-sp-credentials
-              key: clientId
-        clientSecret:
-          valueFrom:
-            secretKeyRef:
-              name: azure-sp-credentials
-              key: clientSecret
-        tenantId:
-          valueFrom:
-            secretKeyRef:
-              name: azure-sp-credentials
-              key: tenantId
+      kusto:
+        - name: AdxSink1
+          ingestionUri: "https://ingest-cluster.region.kusto.windows.net"
+          database: "GraphHistory"
+          clientId:
+            valueFrom:
+              secretKeyRef:
+                name: azure-sp-credentials
+                key: clientId
+          clientSecret:
+            valueFrom:
+              secretKeyRef:
+                name: azure-sp-credentials
+                key: clientSecret
+          tenantId:
+            valueFrom:
+              secretKeyRef:
+                name: azure-sp-credentials
+                key: tenantId
 
-    postgres:
-      - name: PostgresDataHistory
-        connectionString:
-          valueFrom:
-            secretKeyRef:
-              name: postgres-history
-              key: connectionString
-        # Optional: schema and table name overrides (defaults: public / adt_*_events)
-        # schema: public
-        # propertyEventsTable: adt_property_events
+      postgres:
+        - name: PostgresDataHistory
+          connectionString:
+            valueFrom:
+              secretKeyRef:
+                name: postgres-history
+                key: connectionString
+          # Optional: schema and table name overrides (defaults: public / adt_*_events)
+          # schema: public
+          # propertyEventsTable: adt_property_events
     
-    mqtt:
-      - name: MqttBroker1
-        broker: "mqtt.example.com"
-        port: 8883
-        topic: "graph/events"
-        username:
-          valueFrom:
-            secretKeyRef:
-              name: mqtt-credentials
-              key: username
-        password:
-          valueFrom:
-            secretKeyRef:
-              name: mqtt-credentials
-              key: password
+      mqtt:
+        - name: MqttBroker1
+          broker: "mqtt.example.com"
+          port: 8883
+          topic: "graph/events"
+          username:
+            valueFrom:
+              secretKeyRef:
+                name: mqtt-credentials
+                key: username
+          password:
+            valueFrom:
+              secretKeyRef:
+                name: mqtt-credentials
+                key: password
     
-    webhook:
-      - name: WebhookEndpoint1
-        url: "https://api.example.com/events"
-        authenticationType: "Bearer"
-        bearerToken:
-          valueFrom:
-            secretKeyRef:
-              name: webhook-credentials
-              key: token
+      webhook:
+        - name: WebhookEndpoint1
+          url: "https://api.example.com/events"
+          authenticationType: "Bearer"
+          bearerToken:
+            valueFrom:
+              secretKeyRef:
+                name: webhook-credentials
+                key: token
     
-    nats:
-      - name: NatsSink1
-        url: "nats://nats-cluster:4222"
-        subject: "graph.events"
-        jetStream: true
-        streamName: "graph-events"
-        useBinaryMode: true
-        # Optional: username/password or token auth
-        # username:
-        #   valueFrom:
-        #     secretKeyRef:
-        #       name: nats-credentials
-        #       key: username
-        # password:
-        #   valueFrom:
-        #     secretKeyRef:
-        #       name: nats-credentials
-        #       key: password
+      nats:
+        - name: NatsSink1
+          url: "nats://nats-cluster:4222"
+          subject: "graph.events"
+          jetStream: true
+          streamName: "graph-events"
+          useBinaryMode: true
+          # Optional: username/password or token auth
+          # username:
+          #   valueFrom:
+          #     secretKeyRef:
+          #       name: nats-credentials
+          #       key: username
+          # password:
+          #   valueFrom:
+          #     secretKeyRef:
+          #       name: nats-credentials
+          #       key: password
 
-  # Define event routes
-  eventRoutes:
-    - sinkName: KafkaSink1
-      eventFormat: EventNotification  # Real-time events
-    - sinkName: AdxSink1
-      eventFormat: DataHistory        # Historical archive
-    - sinkName: PostgresDataHistory
-      eventFormat: DataHistory        # SQL-queryable history
-    - sinkName: MqttBroker1
-      eventFormat: EventNotification
-    - sinkName: WebhookEndpoint1
-      eventFormat: EventNotification
-    - sinkName: NatsSink1
-      eventFormat: EventNotification
+    # Define event routes
+    eventRoutes:
+      - sinkName: KafkaSink1
+        eventFormat: EventNotification  # Real-time events
+      - sinkName: AdxSink1
+        eventFormat: DataHistory        # Historical archive
+      - sinkName: PostgresDataHistory
+        eventFormat: DataHistory        # SQL-queryable history
+      - sinkName: MqttBroker1
+        eventFormat: EventNotification
+      - sinkName: WebhookEndpoint1
+        eventFormat: EventNotification
+      - sinkName: NatsSink1
+        eventFormat: EventNotification
+```
 
 Apply configuration:
 ```bash
-helm upgrade my-graph konnektr/graph -f values.yaml
+helm upgrade graph oci://ghcr.io/konnektr-io/charts/graph -n graph -f values.yaml
 ```
 
 ## Event Formats
@@ -278,7 +240,7 @@ Full CloudEvents 1.0 format with complete event details. Use for real-time monit
 {
   "specversion": "1.0",
   "type": "Konnektr.Graph.Twin.Update",
-  "source": "https://my-instance.api.graph.konnektr.io",
+  "source": "https://graph.example.com",
   "id": "550e8400-e29b-41d4-a716-446655440000",
   "time": "2025-01-20T10:30:00Z",
   "subject": "sensor-temp-01",
@@ -313,7 +275,7 @@ Optimized flat format for time-series storage and historical analysis. Designed 
 ```json
 {
   "TimeStamp": "2025-01-20T10:30:00Z",
-  "ServiceId": "my-instance.api.graph.konnektr.io",
+  "ServiceId": "graph.example.com",
   "Id": "sensor-temp-01",
   "ModelId": "dtmi:com:example:Sensor;1",
   "Key": "temperature",
@@ -439,7 +401,7 @@ eventSinks:
 
 ### Injecting Secrets Securely
 
-For self-hosted deployments, always use Kubernetes secrets:
+Always inject credentials from Kubernetes secrets:
 
 ```bash
 # Create secret
@@ -464,8 +426,6 @@ extraEnv:
 The path format follows .NET configuration conventions:
 - Pattern: `EventSinks__<SinkType>__<Index>__<Property>`
 - Example: `EventSinks__Kafka__0__SaslPassword` for first Kafka sink
-
-For managed deployments, credentials are entered securely in the ktrlplane UI and encrypted at rest.
 
 ## Common Patterns
 
@@ -593,18 +553,14 @@ Give AI agents perfect memory of historical patterns:
 - Check that routes are enabled in settings
 - Confirm sink name in route matches configured sink
 
-**Review logs (self-hosted):**
+**Review logs:**
 ```bash
 kubectl logs <graph-pod> | grep "EventRouting"
 ```
 
 ### Authentication Failures
 
-**For managed deployments:**
-- Re-enter credentials in ktrlplane UI
-- Verify service principal has required permissions
-
-**For self-hosted:**
+**Check the injected configuration:**
 ```bash
 # Verify secret exists
 kubectl get secret <secret-name>
@@ -642,7 +598,7 @@ az kusto database principal-assignment list \
 - **[Data History with PostgreSQL / TimescaleDB](../how-to-guides/data-history-postgres)** - SQL-queryable history with hypertables
 - **[Telemetry](telemetry)** - Send custom telemetry messages
 - **[Querying](querying.mdx)** - Query your graph effectively
-- **[Deployment Guide](../deployment-installation/hosted-konnektr)** - Deploy Konnektr Graph
+- **[Deployment Guide](../deployment-installation/self-host)** - Deploy Konnektr Graph
 
 {/* ## Examples
 

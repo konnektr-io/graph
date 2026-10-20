@@ -1,6 +1,6 @@
 # Gemini Code Intelligence File
 
-This file provides context for Gemini to understand the `pg-age-digitaltwins` (Konnektr Graph) repository.
+This file provides context for Gemini to understand the `konnektr-io/graph` (Konnektr Graph) repository.
 
 ## Project Overview
 

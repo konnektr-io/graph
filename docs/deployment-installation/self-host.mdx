@@ -1,204 +1,184 @@
 ---
 title: Self-Hosted Deployment
 icon: Sailboat
-description: Deploy Konnektr Graph in your own infrastructure for full control and direct database access. Recommended for advanced users who need custom configurations.
+description: Deploy Konnektr Graph on Kubernetes with the Helm chart — bundled or external PostgreSQL, authentication, scaling and troubleshooting.
 ---
 
-## When to Self-Host
-
-Self-hosting Konnektr Graph is recommended for:
-
-- **Direct Database Access**: Need to use the native AgeDigitalTwins SDK
-- **Custom Authentication**: Want to integrate with your own identity provider
-- **Compliance Requirements**: Data must remain in your infrastructure
-- **Advanced Customization**: Need custom PostgreSQL extensions or configurations
-- **Air-Gapped Environments**: No internet connectivity requirements
-
-> **Most users should use [Hosted Konnektr Graph](./hosted-konnektr) instead** - it's faster to set up, fully managed, and includes enterprise features out of the box.
-
-## SDK Access Comparison
-
-| SDK Type | Hosted | Self-Hosted |
-|----------|---------|-------------|
-| **Azure Digital Twins SDK** | ✅ Recommended | ✅ With custom auth |
-| **Native AgeDigitalTwins SDK** | ❌ Not available | ✅ Direct database access |
+Konnektr Graph runs on Kubernetes. The chart can deploy PostgreSQL for you (CloudNativePG
+with Apache AGE) or connect to a database you already operate.
 
 ## Prerequisites
 
-- Kubernetes cluster (1.20+)
-- Helm 3.0+
-- PostgreSQL 13+ with Apache AGE extension
-- Storage provisioner for persistent volumes
-- Load balancer or ingress controller (for external access)
+- Kubernetes 1.24+
+- Helm 3.8+ (the chart is published as an OCI artifact)
+- A default `StorageClass` if you let the chart create the database
+- An ingress controller or Gateway API implementation, if the API must be reachable from
+  outside the cluster
 
-## Helm Chart Deployment
+For an external database: PostgreSQL 16, 17 or 18 with the Apache AGE extension available,
+plus `pgvector` if you want scoped vector memory search.
 
-1. Add the Konnektr Helm repository:
-   ```bash
-   helm repo add konnektr https://konnektr-io.github.io/charts
-   ```
-2. Install the AgeDigitalTwins chart:
-   ```bash
-   helm install my-agedigitaltwins konnektr/agedigitaltwins --values my-values.yaml
-   ```
-3. Verify the installation:
-   ```bash
-   kubectl get pods
-   ```
+## Install
 
-### Helm Chart Configuration
+```bash
+helm install graph oci://ghcr.io/konnektr-io/charts/graph \
+  --namespace graph --create-namespace \
+  --set api.enabled=true \
+  --set cluster.enabled=true \
+  --set api.config.authentication.enabled=false
+```
 
-The Helm chart can be customized using a `values.yaml` file. Below are some of the most important configuration options:
+Both `api.enabled` and `cluster.enabled` default to `false` — a bare `helm install` creates
+nothing on purpose. Set them explicitly, or pass a values file:
 
-- `api.logLevel`: Set the log level (`Error`, `Warning`, `Information`, `Debug`, `Trace`).
-- `api.openTelemetry.enabled`: Enable OpenTelemetry integration.
-- `api.resources`: Set resource requests and limits for the API pods.
-- `api.service.type`: Service type (`ClusterIP`, `NodePort`, etc.).
-- `api.ingress.enabled`: Enable ingress for external access.
-- `cluster.instances`: Number of PostgreSQL instances.
-- `cluster.storage.size`: Persistent storage size for the database.
-- `backups.enabled`: Enable or disable backups.
-- `events.config.eventSinks`: Configure event sinks (Kafka, Kusto, MQTT, etc.).
+```bash
+helm install graph oci://ghcr.io/konnektr-io/charts/graph -n graph --create-namespace -f my-values.yaml
+```
 
-#### Example `values.yaml`
+Verify:
+
+```bash
+kubectl -n graph get pods
+kubectl -n graph logs deploy/graph-api
+```
+
+## Configuration
+
+The important groups in `values.yaml`:
+
+| Key | What it controls |
+|---|---|
+| `api.enabled` | Deploy the HTTP API (default `false`) |
+| `api.logLevel` | `Error`, `Warning`, `Information`, `Debug`, `Trace` |
+| `api.replicaCount`, `api.autoscaling` | API scaling |
+| `api.service.type`, `api.service.port` | How the API is exposed inside the cluster |
+| `api.ingress.enabled` / `api.httproute.enabled` | Classic Ingress vs Gateway API |
+| `api.config.authentication` | OIDC/JWT or API keys ([details](#authentication)) |
+| `api.config.parameters` | Pool size, timeouts, rate limiting |
+| `api.database.readOnlyHost` | Whether the API's connection string includes the CNPG read-only service |
+| `events.enabled`, `events.config.eventSinks`, `events.config.eventRoutes` | Event streaming |
+| `cluster.enabled`, `cluster.cluster.instances`, `cluster.cluster.storage.size` | The bundled database |
+| `cluster.cluster.enablePDB` | PodDisruptionBudget (disable for single-instance clusters) |
+
+### Example values file
 
 ```yaml
 api:
-  logLevel: "Warning"
+  enabled: true
+  logLevel: Warning
+  replicaCount: 2
   resources:
-    limits:
-      cpu: 500m
-      memory: 512Mi
     requests:
       cpu: 250m
       memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
   service:
     type: ClusterIP
     port: 8080
+  config:
+    authentication:
+      enabled: false
 cluster:
-  instances: 2
-  storage:
-    size: 2Gi
-backups:
+  enabled: true
+  cluster:
+    instances: 1
+    storage:
+      size: 2Gi
+    enablePDB: false
+events:
   enabled: false
 ```
 
-For a full list of configuration options, see the `values.yaml` file in the Helm chart.
+The chart's `values.yaml` documents every option inline; it is the authoritative reference.
 
-## Using the Native AgeDigitalTwins SDK
+## Authentication
 
-One key advantage of self-hosting is direct access to the native AgeDigitalTwins SDK, which connects directly to your PostgreSQL database:
+Authentication is disabled by default.
 
-### Installation
+### No authentication (development only)
 
-```bash
-dotnet add package AgeDigitalTwins
+```yaml
+api:
+  config:
+    authentication:
+      enabled: false
 ```
 
-### Direct Database Connection
+### OIDC / JWT
+
+Any OpenID Connect provider — Entra ID, Keycloak, Auth0, Dex:
+
+```yaml
+api:
+  config:
+    authentication:
+      enabled: true
+      metadataAddress: https://login.microsoftonline.com/<tenant-id>/v2.0/.well-known/openid-configuration
+      audience: api://konnektr-graph
+      issuer: https://sts.windows.net/<tenant-id>/
+```
+
+### API keys
+
+For service-to-service calls without an identity provider. See the
+[configuration reference](../reference/configuration) for the exact key names, and the
+[authorization architecture](../advanced-topics/authorization-architecture) page for how
+permissions are evaluated when authorization is enabled.
+
+## Using the native SDK
+
+Self-hosting gives you the option of bypassing HTTP entirely with the
+`Konnektr.AgeDigitalTwins` .NET package, which talks to PostgreSQL directly:
+
+```bash
+dotnet add package Konnektr.AgeDigitalTwins
+```
 
 ```csharp
 using AgeDigitalTwins;
 using Npgsql;
 
-var connectionString = "Host=localhost;Username=postgres;Password=yourpassword;Database=agedb";
-var dataSource = NpgsqlDataSource.Create(connectionString);
+var dataSource = NpgsqlDataSource.Create(
+    "Host=localhost;Username=postgres;Password=...;Database=postgres");
 var client = new AgeDigitalTwinsClient(dataSource, "digitaltwins");
 
-// Direct database operations - no HTTP API layer
 var models = await client.GetModelsAsync();
 var twin = await client.GetDigitalTwinAsync("sensor-001");
 ```
 
-### Benefits of Direct SDK
+Direct access trades the HTTP hop for a database connection: lower latency, native Cypher
+and transactions, but no per-request authorization layer — your credentials decide what a
+caller can do.
 
-- **Performance**: No HTTP API overhead - direct database queries
-- **Advanced Queries**: Full Cypher query support with complex graph traversals
-- **Bulk Operations**: Efficient batch inserts and updates
-- **Custom Extensions**: Access to underlying PostgreSQL and Apache AGE features
-- **Transaction Support**: Multi-operation transactions with rollback support
+## Post-deployment checks
 
-## Authentication Options
-
-### Option 1: No Authentication (Development)
-```yaml
-api:
-  authentication:
-    enabled: false
-```
-
-### Option 2: JWT Validation
-```yaml
-api:
-  authentication:
-    enabled: true
-    jwt:
-      authority: "https://your-identity-provider.com"
-      audience: "your-api-audience"
-```
-
-### Option 3: API Keys
-```yaml
-api:
-  authentication:
-    enabled: true
-    apiKeys:
-      - "your-api-key-1"
-      - "your-api-key-2"
-```
-
-## Post-Deployment Setup
-
-### 1. Verify Installation
 ```bash
-kubectl get pods -l app=agedigitaltwins
-kubectl logs -l app=agedigitaltwins-api
+kubectl -n graph get pods -l app=graph-api
+kubectl -n graph port-forward svc/graph-api 8080:8080
+curl -s http://localhost:8080/health
 ```
 
-### 2. Test API Access
-```bash
-curl http://your-api-endpoint/health
-```
+Then upload a model and a twin — the [quickstart](../getting-started/quickstart) has the
+exact calls.
 
-### 3. Initialize with Sample Data
-Using the native SDK:
-```csharp
-// Upload a DTDL model
-var model = File.ReadAllText("room-model.json");
-await client.CreateModelsAsync(new[] { model });
+## Monitoring
 
-// Create a digital twin
-var twin = new { Temperature = 20.5, Humidity = 45.0 };
-await client.CreateOrReplaceDigitalTwinAsync("room-001", twin);
-```
+- `/health` for liveness and readiness (the chart's probes already use it)
+- Prometheus-format metrics from the API
+- OpenTelemetry traces via `api.openTelemetry.exporterEndpoint`
+- JSON logs with correlation IDs
 
-## Monitoring & Observability
-
-Self-hosted deployments include:
-
-- **Prometheus Metrics**: Built-in metrics endpoint at `/metrics`
-- **OpenTelemetry**: Distributed tracing support
-- **Health Checks**: Kubernetes-ready health endpoints
-- **Structured Logging**: JSON logs with correlation IDs
-
-### Example Prometheus Configuration
 ```yaml
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: prometheus-config
-data:
-  prometheus.yml: |
-    scrape_configs:
-    - job_name: 'agedigitaltwins'
-      static_configs:
-      - targets: ['agedigitaltwins-api:8080']
-      metrics_path: '/metrics'
+api:
+  openTelemetry:
+    enabled: true
+    exporterEndpoint: http://otel-collector.opentelemetry.svc.cluster.local:4317
 ```
 
-## Scaling Considerations
+## Scaling and availability
 
-### Horizontal Scaling
 ```yaml
 api:
   replicaCount: 3
@@ -206,72 +186,52 @@ api:
     enabled: true
     minReplicas: 2
     maxReplicas: 10
-    targetCPUUtilizationPercentage: 70
-```
-
-### Database High Availability
-```yaml
 cluster:
-  instances: 3
-  postgresql:
-    synchronous_mode: true
-    max_connections: 200
+  cluster:
+    instances: 3
 ```
 
-## Migration to/from Hosted
+The API is stateless and scales horizontally; the database is the bottleneck. On a
+single-instance database set `cluster.cluster.enablePDB: false` — a one-instance cluster can
+never satisfy `minAvailable: 1`, and CNPG then blocks every drain (node upgrades, reboots).
 
-### From Hosted to Self-Hosted
-1. Export models and twins via Azure Digital Twins SDK
-2. Deploy self-hosted instance
-3. Import data using native SDK for better performance
-4. Update application connection strings
-
-### From Self-Hosted to Hosted
-1. Export models and twins using native SDK
-2. Create hosted Konnektr Graph instance
-3. Import data via Azure Digital Twins SDK
-4. Update authentication to use Auth0
+Backups are not managed by this chart. Use CloudNativePG's object-store backup support (or
+your existing PostgreSQL tooling) against the cluster it creates.
 
 ## Troubleshooting
 
-### Common Issues
-
-**Pod Crashes**
 ```bash
-kubectl describe pod <pod-name>
-kubectl logs <pod-name> --previous
+kubectl -n graph describe pod <pod>
+kubectl -n graph logs <pod> --previous
+
+# database reachable and extension present?
+kubectl -n graph exec -it <api-pod> -- \
+  psql "$ConnectionStrings__Age" -c "SELECT extversion FROM pg_extension WHERE extname='age';"
+
+# slow queries?
+kubectl -n graph exec -it <db-pod> -- psql -c "SELECT * FROM pg_stat_activity WHERE state='active';"
 ```
 
-**Database Connection Issues**
-```bash
-kubectl exec -it <api-pod> -- psql -h <db-host> -U postgres -d agedb -c "SELECT version();"
-```
+Common causes: the database is not ready when the API starts (the pod retries — check
+`/health`), the AGE extension is missing from an external database, or `cluster.enabled` and
+an external connection string are both set.
 
-**Performance Problems**
-```bash
-kubectl top pods
-kubectl exec -it <db-pod> -- psql -c "SELECT * FROM pg_stat_activity;"
-```
+## Security
 
-## Security Best Practices
-
-- **Network Policies**: Restrict pod-to-pod communication
-- **RBAC**: Use Kubernetes role-based access control
-- **Secrets Management**: Use Kubernetes secrets or external secret managers
-- **TLS**: Enable TLS for all external communications
-- **Database Security**: Use strong passwords and connection encryption
+- Enable authentication before exposing the API outside the cluster
+- Put the API behind the ingress/HTTPRoute rather than a `NodePort`
+- Keep SASL passwords and connection strings in Secrets via `extraEnv`
+- Apply NetworkPolicies so only the API reaches PostgreSQL
+- Terminate TLS at the gateway; the API itself speaks plain HTTP
 
 ## Support
 
-For self-hosted deployments:
-- **Community Support**: [GitHub Discussions](https://github.com/konnektr-io/pg-age-digitaltwins/discussions)
-- **Issues**: [GitHub Issues](https://github.com/konnektr-io/pg-age-digitaltwins/issues)
-- **Documentation**: [Advanced Topics](../advanced-topics/)
+- [GitHub Discussions](https://github.com/konnektr-io/graph/discussions)
+- [GitHub Issues](https://github.com/konnektr-io/graph/issues)
+- [Advanced topics](../advanced-topics/)
 
-For enterprise support and professional services, contact [support@konnektr.io](mailto:support@konnektr.io).
+## Next steps
 
-## Next Steps
-
-- [Native SDK Reference](../reference/sdk) - Complete AgeDigitalTwins SDK documentation
-- [Advanced Configuration](../advanced-topics/performance) - Performance tuning
-- [Event Routing](../concepts/event-routing) - Set up real-time streaming
+- [Native SDK reference](../reference/sdk)
+- [Performance tuning](../advanced-topics/performance)
+- [Event routing](../concepts/event-routing)

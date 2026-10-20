@@ -82,4 +82,26 @@ var result = await client.QueryAsync<JsonDocument>(
 
 Parameters are automatically embedded in continuation tokens for pagination. You only need to supply parameters on the first request; subsequent pages reuse them transparently.
 
-For more examples, refer to the [QueryTests.cs](../src/AgeDigitalTwins.Test/QueryTests.cs) and [AdtQueryToCypherTests.cs](../src/AgeDigitalTwins.Test/AdtQueryToCypherTests.cs).
+For more examples, refer to the [QueryTests.cs](https://github.com/konnektr-io/graph/blob/main/src/AgeDigitalTwins.Test/QueryTests.cs) and [AdtQueryToCypherTests.cs](https://github.com/konnektr-io/graph/blob/main/src/AgeDigitalTwins.Test/AdtQueryToCypherTests.cs).
+
+## The `/entities` alias
+
+Every route under `/digitaltwins` is also served under `/entities`, by the same handlers:
+the path is rewritten before routing, so the bodies, status codes, auth policies and rate
+limits are identical — they are not two implementations.
+
+```bash
+# identical responses
+curl http://localhost:8080/digitaltwins/room-1
+curl http://localhost:8080/entities/room-1
+
+# queries still use the ADT dialect either way
+curl -X POST http://localhost:8080/query -H 'Content-Type: application/json' \
+  -d '{"query": "SELECT * FROM DIGITALTWINS WHERE $dtId = '\''room-1'\''"}'
+```
+
+Use it when the domain has no digital-twin vocabulary. The payloads do not change: `$dtId`
+and `$metadata.$model` are the same on both paths, and `FROM DIGITALTWINS` remains the query
+dialect. The alias is not listed in the OpenAPI document, so generated clients see a single
+canonical surface.
+
