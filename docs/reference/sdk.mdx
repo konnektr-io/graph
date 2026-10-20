@@ -3,7 +3,10 @@ title: Native SDK Reference
 icon: Code
 ---
 
-> **Note**: This SDK talks to PostgreSQL directly, so it needs database access. For HTTP integrations, use the [Azure Digital Twins SDK](../how-to-guides/using-azure-digital-twins-sdks) instead.
+> **Note**: This SDK talks to PostgreSQL directly, so it needs database access. For HTTP
+> integrations use the [Python SDK](./python-sdk) (`konnektr-graph`, the ADT-compatible
+> client with search and pgvector support) or the
+> [Azure Digital Twins SDK](../how-to-guides/using-azure-digital-twins-sdks).
 
 ## Overview
 
@@ -25,7 +28,7 @@ The AgeDigitalTwins SDK provides a .NET client for direct database access to you
 
 ### Native SDK vs REST API Comparison
 
-| Feature | REST API (ADT SDK) | Native SDK |
+| Feature | REST API (ADT / Python SDK) | Native SDK |
 |---------|-------------------|---------------------------|
 | **Connection** | HTTPS REST API | Direct PostgreSQL |
 | **Authentication** | OAuth 2.1 JWT | Database credentials |
@@ -214,6 +217,7 @@ For migration to the HTTP API (Konnektr Graph or Azure Digital Twins), you'll ne
 
 ## Related Documentation
 
-- **HTTP API Clients**: [Azure Digital Twins SDK Guide](../how-to-guides/using-azure-digital-twins-sdks)
+- **HTTP API Clients**: [Python SDK](./python-sdk) (ADT-compatible, adds search and
+  pgvector) and [Azure Digital Twins SDK Guide](../how-to-guides/using-azure-digital-twins-sdks)
 - **Deployment**: [Self-Hosted Deployment](../deployment-installation/self-host)
 - **Performance Tuning**: [Advanced Topics](../advanced-topics/performance)
