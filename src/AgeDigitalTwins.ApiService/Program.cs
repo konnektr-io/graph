@@ -5,10 +5,12 @@ using AgeDigitalTwins.ApiService;
 using AgeDigitalTwins.ApiService.Configuration;
 using AgeDigitalTwins.ApiService.Extensions;
 using AgeDigitalTwins.ApiService.Middleware;
+using AgeDigitalTwins.ApiService.Routing;
 using AgeDigitalTwins.ApiService.Services;
 using AgeDigitalTwins.ServiceDefaults.Authorization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Rewrite;
 using Microsoft.IdentityModel.Tokens;
 using Npgsql;
 using Npgsql.Age;
@@ -305,6 +307,27 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 });
 
 var app = builder.Build();
+
+// Vocabulary-neutral route alias: /entities/* is served by the same handlers as
+// /digitaltwins/*, by rewriting the path before endpoint selection. UseRouting is
+// called explicitly right after it because WebApplication would otherwise insert
+// routing at the very start of the pipeline, i.e. before this rewrite, and the
+// alias would never match.
+app.UseRewriter(
+    new RewriteOptions().Add(context =>
+    {
+        if (
+            EntityRouteAlias.TryRewrite(
+                context.HttpContext.Request.Path,
+                out PathString rewrittenPath
+            )
+        )
+        {
+            context.HttpContext.Request.Path = rewrittenPath;
+        }
+    })
+);
+app.UseRouting();
 
 // Use CORS before authentication and endpoints
 if (useCors)
