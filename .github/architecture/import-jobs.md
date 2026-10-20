@@ -1,8 +1,8 @@
----
-title: Import Jobs
-icon: Upload
-description: How the ND-JSON import job system works — streaming ingestion with checkpoint-based resumption, distributed locking, and automatic recovery.
----
+# Import job internals
+
+> Contributor documentation. This is not published on docs.konnektr.io — the user-facing
+> guide is `docs/how-to-guides/import-jobs.mdx`. Keep implementation detail here so the
+> public page can stay task-oriented.
 
 The import job system ingests graph data (models, twins, relationships) from ND-JSON streams into Apache AGE. It supports checkpoint-based resumption, distributed locking, graceful cancellation, and automatic recovery.
 
