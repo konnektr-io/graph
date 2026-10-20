@@ -13,14 +13,14 @@ An import job is a background process that reads data from an input blob (e.g., 
 
 ## Supported Storage Providers
 
-- **Azure Blob Storage (SAS tokens)**: Supported in hosted and self-hosted deployments.
-- **Managed Identity (Azure)**: Only available in self-hosted deployments.
+- **Azure Blob Storage (SAS tokens)**: Supported — pass a blob URI that carries the SAS token.
+- **Managed Identity (Azure)**: Supported when the API pod runs with an Azure workload identity.
 - **AWS S3**: Supported via S3 URIs and default AWS credentials or pre-signed URLs.
 - **Google Cloud Storage**: Supported via GCS URIs and default GCP credentials or signed URLs.
 
 ## Using Azure Blob Storage (SAS Tokens)
 
-For hosted deployments, import jobs require Azure Blob Storage URIs with SAS tokens. SAS tokens grant temporary, scoped access to blobs without needing Azure credentials.
+SAS tokens let import jobs read and write Azure Blob Storage without any Azure credential on the service. SAS tokens grant temporary, scoped access to blobs.
 
 **Example Blob URI:**
 ```
@@ -30,7 +30,7 @@ https://<account>.blob.core.windows.net/<container>/<blob>?sv=...&sig=...
 - The SAS token must be included in the URI query string.
 - Both input and output blob URIs must be accessible with the provided SAS token.
 - The SAS token must grant **read** permission for input blobs and **write** permission for output blobs (use `sp=r` and/or `sp=w` in the SAS token).
-- No Azure credentials or managed identity are required for hosted mode.
+- When the URI carries a SAS token, no Azure credentials or managed identity are needed.
 
 ## Using AWS S3
 
@@ -148,7 +148,7 @@ This function writes the NDJSON file in the required format. Pass lists of model
 
 ## Notes
 
-- For self-hosted deployments, you may use managed identity for Azure Blob Storage if your environment supports it.
+- You may use managed identity for Azure Blob Storage if your environment supports it.
 - All blob URIs must be valid and accessible from the Konnektr Graph instance.
 - See the [API Reference](../reference/api) for endpoint details and request formats.
 

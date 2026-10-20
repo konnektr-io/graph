@@ -35,8 +35,8 @@ The sink works against **plain PostgreSQL** and against **TimescaleDB**. If the 
 
 **Konnektr Graph:**
 
-- A deployment with event routing enabled (self-hosted or managed)
-- Access to the events configuration (Helm values / `appsettings.json`) or the Konnektr Portal
+- A deployment with event routing enabled (`events.enabled=true`)
+- Access to the events configuration (Helm values / `appsettings.json`)
 
 ## Setup
 
@@ -54,7 +54,7 @@ Without the extension everything still works — the tables are created as ordin
 
 ### Step 2: Configure the Event Sink
 
-Add a `Postgres` sink to the events configuration. Self-hosted (Helm values / `appsettings.json`):
+Add a `Postgres` sink to the events configuration (Helm values or `appsettings.json`):
 
 ```json
 {
@@ -102,7 +102,7 @@ Route the events you want archived with the `DataHistory` format to the sink:
 }
 ```
 
-In the Konnektr Portal: **Event Routing → Add Route**, then set **Event Format** to `DataHistory` and **Destination Sink** to `PostgresDataHistory`.
+In Helm values the same entry goes under `events.config.eventRoutes`, with `sinkName: PostgresDataHistory` and `eventFormat: DataHistory`.
 
 You can route the same source events to other sinks too — for example Kafka for real-time consumers and PostgreSQL for the archive.
 

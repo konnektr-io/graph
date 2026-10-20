@@ -7,10 +7,10 @@ Graph Explorer is a web-based application for managing, querying, and visualizin
 
 ## Access Graph Explorer
 
-For hosted Konnektr Graph instances, open Graph Explorer with your resource URL:
+Open Graph Explorer at the host you deployed it to, passing the Graph API host it should talk to as the `x-adt-host` parameter:
 
 ```
-https://explorer.graph.konnektr.io?x-adt-host=your-resource-id.api.graph.konnektr.io
+http://<your-explorer-host>?x-adt-host=graph.example.com
 ```
 
 ## Key Features
@@ -33,23 +33,15 @@ Click panel icons in the header to show/hide panels. Drag panel edges to resize.
 
 ## Authentication
 
-### KtrlPlane Platform
+### Adding a Connection
 
-If you have a Konnektr Platform account:
-
-1. Click **Sign In** in the header
-2. Log in with your KtrlPlane credentials
-3. Your managed Graph resources appear automatically
-
-### Custom Connections
-
-For custom or Azure Digital Twins instances:
+Graph Explorer has no shared sign-in with the graph service; each instance is added as a connection:
 
 1. Click **Connection Selector** → **+ Add Connection**
 2. Choose authentication method:
    - **None** - For local/open endpoints
    - **MSAL** - For Azure Digital Twins
-   - **Auth0** - For custom Konnektr Graph instances
+   - **Auth0** - For Konnektr Graph instances using an Auth0-compatible provider
 3. Enter endpoint URL and credentials
 4. Click **Add Connection**
 
@@ -268,7 +260,6 @@ The Inspector shows detailed information for selected items.
 - Re-enter credentials in connection settings
 - Verify you have correct permissions
 - Check token expiration (sign out and back in)
-- For KtrlPlane connections, refresh the connection list
 
 ### Query Errors
 

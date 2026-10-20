@@ -57,7 +57,7 @@ Authentication is **disabled by default** and must be explicitly enabled.
 |-----|----------|---------|-------------|
 | `Authentication:Enabled` | Yes | `false` | Set to `true` to enable JWT Bearer authentication |
 | `Authentication:Authority` | If enabled | — | OAuth authority URL (e.g., `https://your-tenant.auth0.com/`) |
-| `Authentication:Audience` | If enabled | — | Expected JWT audience (e.g., `https://graph.konnektr.io`) |
+| `Authentication:Audience` | If enabled | — | Expected JWT audience (e.g., `api://konnektr-graph`) |
 | `Authentication:Issuer` | No | — | Expected JWT issuer (validated when set) |
 | `Authentication:MetadataAddress` | No | — | Explicit OIDC metadata URL (overrides discovery from Authority) |
 
@@ -206,7 +206,7 @@ See [Security](/docs/graph/advanced-topics/security) for details.
 When jobs are enabled, blob storage services are registered for import/export of ND-JSON data:
 - `AzureBlobStorageService` — Azure Blob Storage (SAS URIs)
 - `DefaultBlobStorageService` — AWS S3, Google Cloud Storage, or local filesystem (routed by URI scheme)
-- `JobResumptionService` — hosted service that resumes interrupted import jobs on startup
+- `JobResumptionService` — background service (`IHostedService`) that resumes interrupted import jobs on startup
 
 ### OpenAPI / Scalar
 
@@ -507,7 +507,7 @@ Standard ASP.NET Core logging configuration applies. Key namespaces for debuggin
   "Authentication": {
     "Enabled": true,
     "Authority": "https://your-tenant.auth0.com/",
-    "Audience": "https://graph.konnektr.io",
+    "Audience": "api://konnektr-graph",
     "Issuer": "https://your-tenant.auth0.com/"
   },
   "Authorization": {

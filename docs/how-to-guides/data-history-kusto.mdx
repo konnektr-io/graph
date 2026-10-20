@@ -33,8 +33,8 @@ Once configured, every change to your graph—property updates, twin lifecycle e
 - Workspace permissions configured
 
 **Konnektr Graph:**
-- Standard tier ($99/mo) or higher
-- Access to Konnektr Portal for configuration
+- A deployment with event routing enabled (`events.enabled=true`)
+- Access to the events configuration (Helm values / `appsettings.json`)
 
 ## Setup
 
@@ -64,29 +64,45 @@ az kusto database principal-assignment create \
 
 ### Step 2: Configure Event Sink
 
-In ktrlplane:
+Add a `kusto` sink under `events.config.eventSinks` in your Helm values (or `EventSinks:Kusto` in `appsettings.json`):
 
-1. Navigate to your Graph instance
-2. Go to **Settings** > **Event Sinks**
-3. Click **Add Sink** > **Azure Data Explorer**
-4. Enter configuration:
-   - **Name**: `DataHistorySink`
-   - **Ingestion URI**: `https://ingest-<cluster>.<region>.kusto.windows.net`
-   - **Database**: Your database name
-   - **Client ID**: Service principal app ID
-   - **Client Secret**: Service principal password
-   - **Tenant ID**: Azure AD tenant ID
-5. Click **Test Connection** to verify
-6. Save
+```yaml
+events:
+  enabled: true
+  config:
+    eventSinks:
+      kusto:
+        - name: DataHistorySink
+          ingestionUri: "https://ingest-<cluster>.<region>.kusto.windows.net"
+          database: "<database-name>"
+          clientId:
+            valueFrom:
+              secretKeyRef:
+                name: adx-credentials
+                key: appId
+          clientSecret:
+            valueFrom:
+              secretKeyRef:
+                name: adx-credentials
+                key: password
+          tenantId:
+            valueFrom:
+              secretKeyRef:
+                name: adx-credentials
+                key: tenant
+```
 
 ### Step 3: Create Event Route
 
-1. Go to **Settings** > **Event Routes**
-2. Click **Add Route**
-3. Configure:
-   - **Event Format**: `DataHistory`
-   - **Destination Sink**: `DataHistorySink`
-4. Save and activate
+Add a route with the `DataHistory` format pointing at that sink:
+
+```yaml
+events:
+  config:
+    eventRoutes:
+      - sinkName: DataHistorySink
+        eventFormat: DataHistory
+```
 
 ### Step 4: Verify Tables
 
@@ -597,7 +613,7 @@ Agent uses this to inform decision: "Yes, occurred 3 times before, last 2 weeks 
 ```
 
 **Verify event route:**
-- Confirm route is active in ktrlplane
+- Confirm the route is present in `events.config.eventRoutes`
 - Check `eventFormat` is set to `DataHistory`
 - Verify sink name matches
 

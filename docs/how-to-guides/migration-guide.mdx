@@ -8,26 +8,20 @@ This guide explains how to migrate your data from Azure Digital Twins to Konnekt
 ## Migration Scenarios
 
 ### From Azure Digital Twins to Konnektr Graph
-Migrate from Azure Digital Twins to either hosted or self-hosted Konnektr Graph.
+Migrate from Azure Digital Twins to a self-hosted Konnektr Graph instance.
 
 ### Between Konnektr Graph Deployments
-Move data between hosted and self-hosted Konnektr Graph instances.
+Move data between Konnektr Graph instances, for example staging to production.
 
 ### From Other Digital Twin Platforms
 Migrate from other DTDL-compatible platforms.
 
-## 1. Choose Your Target Deployment
+## 1. Prepare the Target Deployment
 
-### Option A: Hosted Konnektr Graph (Recommended)
-1. Create account at [ktrlplane.konnektr.io](https://ktrlplane.konnektr.io)
-2. Deploy a new Konnektr Graph resource
-3. Get your endpoint: `https://your-resource-id.api.graph.konnektr.io`
-4. Set up Auth0 authentication
+Deploy the instance you are migrating into using the [Self-Hosted Guide](../deployment-installation/self-host), then:
 
-### Option B: Self-Hosted Konnektr Graph
-1. Deploy using [Self-Hosted Guide](../deployment-installation/self-host)
-2. Configure authentication (JWT, API keys, or development mode)
-3. Get your endpoint URL
+1. Configure authentication (JWT, API keys, or development mode)
+2. Note your endpoint URL — the examples below use `https://graph.example.com`
 
 ## 2. Migration Approaches
 
@@ -36,15 +30,14 @@ Migrate from other DTDL-compatible platforms.
 The Azure Digital Twins SDK approach works for all scenarios and provides the easiest migration path:
 
 **Benefits:**
-- ✅ Works with both hosted and self-hosted Konnektr Graph
+- ✅ Works against any Konnektr Graph deployment
 - ✅ Handles all DTDL model complexities  
 - ✅ Built-in retry logic and error handling
 - ✅ Same code works for Azure → Konnektr migration
 
 **Setup:**
 - **Source (Azure Digital Twins)**: Use `DefaultAzureCredential`
-- **Target (Hosted Konnektr Graph)**: Use custom Auth0 `TokenCredential`
-- **Target (Self-Hosted)**: Use custom JWT or API key `TokenCredential`
+- **Target (Konnektr Graph)**: Use a custom JWT or API key `TokenCredential`
 
 > **Note:** See [Using Azure Digital Twins SDKs](./using-azure-digital-twins-sdks) for complete authentication setup.
 
@@ -67,7 +60,7 @@ adt_url = "https://your-adt-instance.api.eus.digitaltwins.azure.net"
 adt_client = DigitalTwinsClient(adt_url, DefaultAzureCredential())
 
 # AgeDigitalTwins configuration
-age_base_url = "https://your-resource-id.api.graph.konnektr.io"
+age_base_url = "https://graph.example.com"
 age_headers = {"Authorization": "Bearer your-token"}
 
 # Copy models
@@ -132,7 +125,7 @@ public class AdtMigration
             credential);
             
         ageClient = new HttpClient();
-        ageClient.BaseAddress = new Uri("https://your-resource-id.api.graph.konnektr.io/");
+        ageClient.BaseAddress = new Uri("https://graph.example.com/");
         ageClient.DefaultRequestHeaders.Add("Authorization", "Bearer your-token");
     }
     
@@ -195,7 +188,7 @@ const credential = new DefaultAzureCredential();
 const adtClient = new DigitalTwinsClient(adtUrl, credential);
 
 // AgeDigitalTwins configuration
-const ageBaseUrl = 'https://your-resource-id.api.graph.konnektr.io';
+const ageBaseUrl = 'https://graph.example.com';
 const ageHeaders = { 'Authorization': 'Bearer your-token' };
 
 async function copyModels() {

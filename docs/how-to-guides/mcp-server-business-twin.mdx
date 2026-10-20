@@ -13,20 +13,20 @@ In this example, we will model a **Smart Equipment System**, tracking **Employee
 
 ## Prerequisites
 
-*   A **Konnektr Graph** instance. The MCP server is available on "Standard" and higher tiers.
+*   A **Konnektr Graph** instance deployed on Kubernetes.
 *   An **MCP Client** (e.g., Claude CLI, Claude Desktop, Gemini) that supports OAuth 2.1 or the `npx` command-line tool.
 
 ---
 
-## Part 1: Connecting to the Hosted MCP Server
+## Part 1: Connecting to the MCP Server
 
-Your Konnektr Graph instance is accessible via the shared, secure MCP endpoint.
+The MCP server ships with Konnektr Graph and is reachable at the host you expose it on.
 
 ### 1. Identify Your Endpoint
-The MCP server is hosted at:
-`https://mcp.graph.konnektr.io/mcp?resource_id={your-resource-id}`
+The MCP server is served at:
+`http://<your-mcp-host>/mcp?resource_id=<resource-id>`
 
-You must replace `{your-resource-id}` with the actual ID of your Konnektr Graph instance.
+Replace `<your-mcp-host>` with the hostname you exposed the MCP service on and `<resource-id>` with the ID of your Konnektr Graph instance.
 
 ### 2. Configure Your Client
 The MCP Server uses **OAuth 2.1 with Dynamic Client Registration**. You don't need to provide a `client_id` or `client_secret`. Your client will guide you through a one-time browser login to authorize access.
@@ -34,7 +34,7 @@ The MCP Server uses **OAuth 2.1 with Dynamic Client Registration**. You don't ne
 **For Claude CLI:**
 
 ```bash
-claude mcp add konnektr-graph --transport http https://mcp.graph.konnektr.io/mcp?resource_id=your-resource-id
+claude mcp add konnektr-graph --transport http http://<your-mcp-host>/mcp?resource_id=<resource-id>
 ```
 
 **For Claude Desktop (and similar clients):**
@@ -46,7 +46,7 @@ Edit your `claude_desktop_config.json` (or equivalent) with this simplified conf
   "mcpServers": {
     "konnektr": {
       "command": "npx",
-      "args": ["-y", "mcp-remote", "https://mcp.graph.konnektr.io/mcp?resource_id=your-resource-id"]
+      "args": ["-y", "mcp-remote", "http://<your-mcp-host>/mcp?resource_id=<resource-id>"]
     }
   }
 }

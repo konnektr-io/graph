@@ -7,33 +7,30 @@ description: How to authenticate and manage access to Konnektr Graph
 
 Konnektr Graph uses OAuth 2.1 with JWT Bearer tokens for authentication and fine-grained, permission-based authorization for access control.
 
-## Hosted Version (Recommended)
+## Client Credentials
 
-When using the hosted Konnektr Graph service, authentication and authorization are fully managed for you.
+Konnektr Graph validates OAuth 2.1 JWT bearer tokens issued by the identity provider you configure for your deployment. Every caller needs a client registration in that provider.
 
 ### Getting Your Credentials
 
-1. **Sign up** at [ktrlplane.konnektr.io](https://ktrlplane.konnektr.io)
-2. **Create a Graph resource** in your organization
-3. **Get your API credentials** from the resource dashboard
+Register a client application in your identity provider. Your credentials include:
 
-Your credentials include:
 - **Client ID** - Identifies your application
 - **Client Secret** - Secret key for authentication
-- **Audience** - The API identifier (e.g., `https://graph.konnektr.io`)
-- **Authority** - The OAuth server URL (e.g., `https://auth.konnektr.io`)
+- **Audience** - The API identifier (e.g., `api://konnektr-graph`)
+- **Authority** - The OAuth server URL (e.g., `https://auth.example.com`)
 
 ### Authenticating Requests
 
 Use OAuth 2.1 Client Credentials flow to get an access token:
 
 ```bash
-curl -X POST https://auth.konnektr.io/oauth/token \
+curl -X POST https://auth.example.com/oauth/token \
   -H "Content-Type: application/json" \
   -d '{
     "client_id": "YOUR_CLIENT_ID",
     "client_secret": "YOUR_CLIENT_SECRET",
-    "audience": "https://graph.konnektr.io",
+    "audience": "api://konnektr-graph",
     "grant_type": "client_credentials"
   }'
 ```
@@ -50,7 +47,7 @@ Response:
 Use the access token in all API requests:
 
 ```bash
-curl https://your-resource-id.api.graph.konnektr.io/digitaltwins/twin-1 \
+curl https://graph.example.com/digitaltwins/twin-1 \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
 
@@ -65,13 +62,13 @@ from azure.core.credentials import AccessToken
 from datetime import datetime
 import requests
 
-# Get token from Konnektr Auth
+# Get token from your OAuth provider
 token_response = requests.post(
-    "https://auth.konnektr.io/oauth/token",
+    "https://auth.example.com/oauth/token",
     json={
         "client_id": "YOUR_CLIENT_ID",
         "client_secret": "YOUR_CLIENT_SECRET",
-        "audience": "https://graph.konnektr.io",
+        "audience": "api://konnektr-graph",
         "grant_type": "client_credentials"
     }
 )
@@ -88,7 +85,7 @@ class StaticTokenCredential:
 
 # Connect to Konnektr Graph
 client = DigitalTwinsClient(
-    "https://your-resource-id.api.graph.konnektr.io",
+    "https://graph.example.com",
     StaticTokenCredential(access_token)
 )
 
@@ -98,12 +95,7 @@ twin = client.get_digital_twin("my-twin-id")
 
 ### Managing Permissions
 
-Permissions are managed in the Konnektr Control Plane. See the [Access Control documentation](https://docs.konnektr.io/docs/ktrlplane/concepts/access-control) for details on:
-
-- Creating users and service accounts
-- Assigning roles and permissions
-- Managing organization and project access
-- Setting up custom permission policies
+Permissions are either embedded in the token your identity provider issues, or fetched per request from a permission API you run. See [Permission Providers](#permission-providers) for both options.
 
 **Common Permissions:**
 
@@ -133,16 +125,16 @@ Configure your MCP client with your credentials:
 {
   "mcpServers": {
     "konnektr-graph": {
-      "url": "https://your-resource-id.mcp.graph.konnektr.io",
+      "url": "http://<your-mcp-host>/mcp?resource_id=<resource-id>",
       "transport": {
         "type": "sse"
       },
       "auth": {
         "type": "oauth2",
-        "token_url": "https://auth.konnektr.io/oauth/token",
+        "token_url": "https://auth.example.com/oauth/token",
         "client_id": "YOUR_CLIENT_ID",
         "client_secret": "YOUR_CLIENT_SECRET",
-        "audience": "https://graph.konnektr.io",
+        "audience": "api://konnektr-graph",
         "scope": "mcp:tools"
       }
     }
@@ -150,9 +142,9 @@ Configure your MCP client with your credentials:
 }
 ```
 
-## Self-Hosted Version
+## Identity Provider Configuration
 
-When self-hosting Konnektr Graph, you need to configure your own authentication provider.
+Konnektr Graph does not ship an identity provider. Point it at your own OAuth 2.1 / OpenID Connect provider.
 
 ### Supported Providers
 
@@ -173,9 +165,9 @@ Set these environment variables or update `appsettings.json`:
 ```bash
 # Enable authentication
 Authentication__Enabled=true
-Authentication__Authority=https://your-auth-provider.com
-Authentication__Audience=https://your-graph-api.com
-Authentication__Issuer=https://your-auth-provider.com/
+Authentication__Authority=https://auth.example.com
+Authentication__Audience=api://konnektr-graph
+Authentication__Issuer=https://auth.example.com/
 
 # Enable authorization
 Authorization__Enabled=true
@@ -188,9 +180,9 @@ Authorization__PermissionsClaimName=permissions
 ```bash
 # Enable authentication
 Authentication__Enabled=true
-Authentication__Authority=https://your-auth-provider.com
-Authentication__Audience=https://your-graph-api.com
-Authentication__Issuer=https://your-auth-provider.com/
+Authentication__Authority=https://auth.example.com
+Authentication__Audience=api://konnektr-graph
+Authentication__Issuer=https://auth.example.com/
 
 # Enable authorization with MCP scopes
 Authorization__Enabled=true
@@ -205,7 +197,7 @@ Parameters__UserIdHeaderRequired=false
 # MCP metadata
 MCP__ServerName=My Graph MCP Server
 MCP__Version=1.0.0
-MCP__ResourceServerUrl=https://your-mcp-server.com
+MCP__ResourceServerUrl=http://<your-mcp-host>
 ```
 
 ### JWT Token Requirements
@@ -215,8 +207,8 @@ Your OAuth provider must issue JWT tokens with these claims:
 ```json
 {
   "sub": "user-or-service-account-id",
-  "aud": "https://your-graph-api.com",
-  "iss": "https://your-auth-provider.com/",
+  "aud": "api://konnektr-graph",
+  "iss": "https://auth.example.com/",
   "scope": "mcp:tools",
   "permissions": [
     "digitaltwins/read",
@@ -315,7 +307,7 @@ See [Security](/docs/graph/advanced-topics/security) for details.
 
 1. **Create an API** in Auth0 Dashboard
    - Name: `Konnektr Graph`
-   - Identifier: `https://your-graph-api.com`
+   - Identifier: `api://konnektr-graph`
    
 2. **Create a Machine-to-Machine Application**
    - Authorize it for your API
@@ -334,7 +326,7 @@ See [Security](/docs/graph/advanced-topics/security) for details.
    - Create a client secret
 
 2. **Expose an API**
-   - Set Application ID URI: `https://your-graph-api.com`
+   - Set Application ID URI: `api://konnektr-graph`
    - Add scopes for each permission
 
 3. **App Roles** (optional)
@@ -357,7 +349,7 @@ This endpoint returns RFC 9728 Protected Resource Metadata:
 ```json
 {
   "resource": "https://your-server.com",
-  "authorization_servers": ["https://your-auth-provider.com"],
+  "authorization_servers": ["https://auth.example.com"],
   "scopes_supported": ["mcp:tools", "mcp:resources"],
   "bearer_methods_supported": ["header"]
 }
@@ -409,8 +401,7 @@ Returned when OAuth scope is missing:
 - Scope not configured in OAuth provider
 
 **Solution:** 
-- **Hosted:** Ensure your client credentials have `mcp:tools` scope assigned
-- **Self-hosted:** Configure your OAuth provider to include the scope in tokens
+- Configure your OAuth provider to include the scope in issued tokens
 
 ### 403 Forbidden - Missing Permission
 
@@ -431,8 +422,7 @@ Returned when permission is missing:
 - Permission API call failed (if using API provider)
 
 **Solution:**
-- **Hosted:** Assign permissions in [Konnektr Control Plane](https://docs.konnektr.io/docs/ktrlplane/concepts/access-control)
-- **Self-hosted:** Add permissions to JWT token or configure permission API
+- Add the permission to the JWT token, or configure your permission API to return it
 
 ## Troubleshooting
 
@@ -500,7 +490,7 @@ Solution:
 
 ### Enabling Debug Logging
 
-**Self-hosted only:**
+**Enable verbose authentication logging:**
 
 Add to `appsettings.Development.json`:
 
@@ -538,7 +528,7 @@ This logs:
 - **Audit permissions** - Review access regularly
 - **Use service accounts** - Dedicated credentials for applications
 
-### Self-Hosted Considerations
+### Operational Considerations
 
 - **Secure OAuth provider** - Use established providers (Auth0, Azure AD)
 - **Monitor auth logs** - Watch for suspicious patterns
@@ -547,7 +537,6 @@ This logs:
 
 ## Further Reading
 
-- [Konnektr Access Control](https://docs.konnektr.io/docs/ktrlplane/concepts/access-control) - Managing users and permissions in hosted version
 - [MCP OAuth Specification](https://spec.modelcontextprotocol.io/specification/2024-11-05/security/) - MCP security requirements
 - [RFC 9728: Protected Resource Metadata](https://www.rfc-editor.org/rfc/rfc9728.html) - OAuth discovery standard
 - [OAuth 2.1 Specification](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-10) - Latest OAuth standard

@@ -177,8 +177,7 @@ Key security aspects of the rate limiter:
 
 Konnektr Graph does not terminate TLS itself. In production:
 
-- **Hosted version**: TLS is handled by the Konnektr platform edge
-- **Self-hosted**: Terminate TLS at your ingress gateway (Kubernetes Ingress, Azure Application Gateway, nginx, etc.)
+- **TLS termination**: Terminate TLS at your ingress gateway (Kubernetes Ingress, Azure Application Gateway, nginx, etc.)
 - **Internal communication** between the API Service and PostgreSQL should use TLS if they are not on the same network
 
 ### Database Connection Security

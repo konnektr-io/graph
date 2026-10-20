@@ -1,34 +1,34 @@
 ---
-title: Native SDK Reference (Self-Hosted Only)
+title: Native SDK Reference
 icon: Code
 ---
 
-> **Note**: This SDK is only available for **self-hosted deployments**. For hosted Konnektr Graph, use the [Azure Digital Twins SDK](../how-to-guides/using-azure-digital-twins-sdks) instead.
+> **Note**: This SDK talks to PostgreSQL directly, so it needs database access. For HTTP integrations, use the [Azure Digital Twins SDK](../how-to-guides/using-azure-digital-twins-sdks) instead.
 
 ## Overview
 
-The AgeDigitalTwins SDK provides a .NET client for direct database access to your self-hosted Konnektr Graph instance. It connects directly to PostgreSQL with Apache AGE, bypassing the HTTP API layer for maximum performance.
+The AgeDigitalTwins SDK provides a .NET client for direct database access to your Konnektr Graph instance. It connects directly to PostgreSQL with Apache AGE, bypassing the HTTP API layer for maximum performance.
 
 ### When to Use This SDK
 
 ✅ **Use the Native SDK when:**
-- You have a self-hosted Konnektr Graph deployment
+- You have a Konnektr Graph deployment and access to its PostgreSQL database
 - You need maximum performance with direct database access
 - You want to perform bulk operations efficiently
 - You need advanced Cypher query capabilities
 - You require transaction support
 
 ❌ **Don't use this SDK if:**
-- You're using hosted Konnektr Graph (not accessible)
+- You're integrating over HTTP without database access
 - You want to migrate to/from Azure Digital Twins easily
 - You prefer standard REST API patterns
 
-### Hosted vs Self-Hosted SDK Comparison
+### Native SDK vs REST API Comparison
 
-| Feature | Hosted (Azure SDK) | Self-Hosted (Native SDK) |
+| Feature | REST API (ADT SDK) | Native SDK |
 |---------|-------------------|---------------------------|
 | **Connection** | HTTPS REST API | Direct PostgreSQL |
-| **Authentication** | Auth0 JWT | Database credentials |
+| **Authentication** | OAuth 2.1 JWT | Database credentials |
 | **Performance** | Good | Excellent |
 | **Bulk Operations** | Standard | Optimized |
 | **Transactions** | Not supported | Full support |
@@ -206,14 +206,14 @@ var twin = await client.GetDigitalTwinAsync<object>("twin1");
 
 ### From Native SDK to Azure Digital Twins SDK
 
-For migration to hosted Konnektr Graph or Azure Digital Twins, you'll need to:
+For migration to the HTTP API (Konnektr Graph or Azure Digital Twins), you'll need to:
 1. Replace database connections with HTTP endpoints
-2. Implement Auth0 or Azure AD authentication
+2. Implement OAuth 2.1 or Azure AD authentication
 3. Update query syntax to ADT query language
 4. Handle API rate limits and pagination
 
 ## Related Documentation
 
-- **For Hosted Users**: [Azure Digital Twins SDK Guide](../how-to-guides/using-azure-digital-twins-sdks)
-- **Self-Hosted Setup**: [Self-Hosted Deployment](../deployment-installation/self-host)
+- **HTTP API Clients**: [Azure Digital Twins SDK Guide](../how-to-guides/using-azure-digital-twins-sdks)
+- **Deployment**: [Self-Hosted Deployment](../deployment-installation/self-host)
 - **Performance Tuning**: [Advanced Topics](../advanced-topics/performance)

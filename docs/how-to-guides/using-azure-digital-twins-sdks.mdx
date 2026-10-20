@@ -10,8 +10,8 @@ You can use the official Azure Digital Twins SDKs (Python, .NET, JavaScript) to 
 Konnektr Graph uses Auth0 for authentication instead of Azure AD, so you **cannot** use `DefaultAzureCredential` or other Azure identity providers. Instead, you must implement a custom `TokenCredential` that obtains tokens from Auth0.
 
 ### Auth0 Configuration
-- **Domain**: `auth.konnektr.io`  
-- **Audience**: `https://graph.konnektr.io`
+- **Domain**: `auth.example.com`  
+- **Audience**: `api://konnektr-graph`
 - **Grant Type**: `client_credentials` (service-to-service)
 
 ## Python SDK
@@ -65,15 +65,15 @@ from azure.digitaltwins.core import DigitalTwinsClient
 
 # Create credential
 credential = KonnektrTokenCredential(
-    domain="auth.konnektr.io",
+    domain="auth.example.com",
     client_id="your-client-id",
     client_secret="your-client-secret", 
-    audience="https://graph.konnektr.io"
+    audience="api://konnektr-graph"
 )
 
 # Create client
 client = DigitalTwinsClient(
-    endpoint="https://your-resource-id.api.graph.konnektr.io",
+    endpoint="https://graph.example.com",
     credential=credential
 )
 
@@ -174,15 +174,15 @@ using System.Text.Json;
 
 // Create credential
 var credential = new KonnektrTokenCredential(
-    domain: "auth.konnektr.io",
+    domain: "auth.example.com",
     clientId: "your-client-id",
     clientSecret: "your-client-secret",
-    audience: "https://graph.konnektr.io"
+    audience: "api://konnektr-graph"
 );
 
 // Create client
 var client = new DigitalTwinsClient(
-    new Uri("https://your-resource-id.api.graph.konnektr.io"),
+    new Uri("https://graph.example.com"),
     credential
 );
 
@@ -271,15 +271,15 @@ const { DigitalTwinsClient } = require('@azure/digital-twins-core');
 
 // Create credential
 const credential = new KonnektrTokenCredential(
-    'auth.konnektr.io',
+    'auth.example.com',
     'your-client-id',
     'your-client-secret',
-    'https://graph.konnektr.io'
+    'api://konnektr-graph'
 );
 
 // Create client
 const client = new DigitalTwinsClient(
-    'https://your-resource-id.api.graph.konnektr.io',
+    'https://graph.example.com',
     credential
 );
 
@@ -320,9 +320,9 @@ For security, store your credentials as environment variables:
 # .env file
 KONNEKTR_CLIENT_ID=your-client-id
 KONNEKTR_CLIENT_SECRET=your-client-secret
-KONNEKTR_DOMAIN=auth.konnektr.io
-KONNEKTR_AUDIENCE=https://graph.konnektr.io
-KONNEKTR_ENDPOINT=https://your-resource-id.api.graph.konnektr.io
+KONNEKTR_DOMAIN=auth.example.com
+KONNEKTR_AUDIENCE=api://konnektr-graph
+KONNEKTR_ENDPOINT=https://graph.example.com
 ```
 
 Then load them in your application:
@@ -405,7 +405,7 @@ Common authentication errors and solutions:
 
 - **401 Unauthorized**: Check your client credentials and ensure they're valid
 - **403 Forbidden**: Verify your Auth0 application has the correct permissions
-- **Invalid audience**: Ensure you're using `https://graph.konnektr.io`
+- **Invalid audience**: Ensure you're using `api://konnektr-graph`
 - **Token expired**: The custom credential should handle renewal automatically
 
 > **Note:** Unlike Azure Digital Twins which uses Azure AD, Konnektr Graph requires Auth0 authentication. You cannot use Azure identity providers like `DefaultAzureCredential`, `AzureCliCredential`, or `ManagedIdentityCredential`.
