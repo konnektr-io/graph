@@ -1,0 +1,200 @@
+---
+title: Python SDK
+icon: Code
+description: The konnektr-graph Python client for the Konnektr Graph HTTP API — an Azure-free replacement for the Azure Digital Twins Python SDK, with search and pgvector support.
+---
+
+`konnektr-graph` is a pure-Python client for the Konnektr Graph HTTP API. It speaks the same
+ADT-compatible endpoints as the Azure Digital Twins SDK, but has no Azure dependency and
+adds the surfaces that only Konnektr Graph has: hybrid search over twins and models, and
+scoped vector memory search backed by pgvector.
+
+```bash
+pip install konnektr-graph
+```
+
+Requires Python 3.11+. Development status: beta.
+
+## When to use it
+
+| Client | Transport | Use when |
+|---|---|---|
+| **`konnektr-graph`** (this page) | HTTP | Python clients that want ADT compatibility **plus** search/vector features |
+| [Azure Digital Twins SDK](./../how-to-guides/using-azure-digital-twins-sdks) | HTTP | Existing ADT code you do not want to change — still works |
+| [Native SDK](./sdk) | PostgreSQL | Maximum throughput, transactions, bulk loads; needs database access |
+
+The API is identical underneath, so you can mix them: an ADT SDK client can read what a
+`konnektr-graph` client wrote, and vice versa.
+
+## Clients
+
+Synchronous and asynchronous clients expose the same methods and typed results.
+
+```python
+from konnektr_graph import KonnektrGraphClient
+from konnektr_graph.auth import ClientSecretCredential
+
+cred = ClientSecretCredential(
+    domain="auth.example.com",
+    audience="api://konnektr-graph",
+    client_id="...",
+    client_secret="...",
+)
+
+client = KonnektrGraphClient("https://graph.example.com", cred)
+twin = client.get_digital_twin("room-1")
+```
+
+```python
+import asyncio
+from konnektr_graph.aio import KonnektrGraphClient
+from konnektr_graph.auth import AsyncClientSecretCredential
+
+async def main():
+    cred = AsyncClientSecretCredential(
+        domain="auth.example.com",
+        audience="api://konnektr-graph",
+        client_id="...",
+        client_secret="...",
+    )
+    async with KonnektrGraphClient("https://graph.example.com", cred) as client:
+        twin = await client.get_digital_twin("room-1")
+        print(twin)
+
+asyncio.run(main())
+```
+
+## Authentication
+
+| Credential | Use case |
+|---|---|
+| `ClientSecretCredential` / `AsyncClientSecretCredential` | Server-to-server (client credentials) |
+| `DeviceCodeCredential` / `AsyncDeviceCodeCredential` | Interactive CLI tools |
+| `StaticTokenCredential` | You already hold a valid access token |
+| `DefaultAzureCredentialAdapter` / `AsyncDefaultAzureCredentialAdapter` | Reuse `azure-identity` credentials, e.g. an ADT audience such as `https://digitaltwins.azure.net/.default` |
+
+The Azure adapter needs the optional extra:
+
+```bash
+pip install "konnektr-graph[azure]"
+```
+
+## Twins, models and relationships
+
+```python
+client.get_digital_twin("room-1")
+client.upsert_digital_twin("room-1", {"$metadata": {"$model": "dtmi:example:Room;1"}, "temperature": 21.5})
+client.update_digital_twin("room-1", patch)          # JSON Patch
+client.delete_digital_twin("room-1")
+
+client.create_models([model_json])
+client.get_model("dtmi:example:Room;1")
+client.list_models()
+client.decommission_model("dtmi:example:Room;1")
+client.delete_model("dtmi:example:Room;1")
+
+client.upsert_relationship("room-1", "contains", "sensor-1", {...})
+client.list_relationships("room-1")
+client.list_incoming_relationships("sensor-1")
+client.publish_telemetry("sensor-1", payload)
+```
+
+Import and delete jobs (`create_import_job`, `list_import_jobs`, `create_delete_job`, …) are
+exposed too. See the [API reference](./api/digital-twins/GetDigitalTwin) for the HTTP shapes.
+
+## Queries
+
+`query_twins` accepts the ADT query dialect and auto-paginates the results:
+
+```python
+for twin in client.query_twins(
+    "SELECT * FROM DIGITALTWINS WHERE IS_OF_MODEL('dtmi:example:Room;1')"
+):
+    print(twin)
+```
+
+Parameters use `$name` placeholders and are only supported for Cypher queries:
+
+```python
+for twin in client.query_twins(
+    "MATCH (t:Twin) WHERE t.`$metadata`.`$model` = $model AND t.temperature > $minTemp RETURN t",
+    query_parameters={"model": "dtmi:example:Room;1", "minTemp": 20},
+):
+    print(twin)
+```
+
+## Search
+
+### Hybrid twin search
+
+```python
+client.search_twins(
+    vector=[0.11, -0.02, 0.58],
+    embedding_property="embedding",
+    model_filter="dtmi:example:Room;1",
+    limit=10,
+)
+```
+
+### Model search
+
+Lexical, vector, or both:
+
+```python
+client.search_models("temperature sensor", limit=5)
+client.search_models("temperature sensor", vector=embedding, limit=5)
+```
+
+### Scoped vector memory search (pgvector)
+
+The scope is enforced **server-side**: model allow-list, property equality filters and the
+related-twin predicate are applied in the database *before* nearest-neighbour ranking and
+`LIMIT`, so ranking never sees out-of-scope rows. Do not filter broad search results locally
+for authorization — use this endpoint.
+
+```python
+results = client.search_memory(
+    vector=[0.11, -0.02, 0.58],
+    limit=5,
+    model_ids=["dtmi:example:MemoryRecord;1"],
+    property_filters={"environmentId": "env-1", "userId": "user-9"},
+    related_twin_id="session-9",
+)
+for record in results:
+    print(record.id, record.distance, record.excerpt)
+```
+
+Probe availability, then build the index once (idempotent; the dimension must match the
+stored embeddings):
+
+```python
+capability = client.get_memory_search_capability()
+if capability.vector_search_available:
+    client.ensure_memory_search_index(dimension=768, embedding_property="embedding")
+```
+
+`ensure_memory_search_index` also accepts `m` and `ef_construction` for HNSW tuning.
+
+To make models searchable by meaning, set their embedding first:
+
+```python
+client.update_model_embedding("dtmi:example:Room;1", embedding)
+```
+
+## Errors
+
+| Exception | Cause |
+|---|---|
+| `AuthenticationError` | 401/403 — bad or missing token, missing permission |
+| `ValidationError` | 400 — invalid payload or query |
+| `ServiceUnavailableError` | 503 — pgvector is not installed for memory search |
+| `HttpResponseError` | other transport/HTTP failures |
+
+Mapping is deliberate so that a missing pgvector extension is distinguishable from a bad
+request: catch `ServiceUnavailableError` and fall back to non-vector search.
+
+## See also
+
+- [Using the Azure Digital Twins SDKs](./../how-to-guides/using-azure-digital-twins-sdks) — the compatibility path
+- [Scoped vector memory search](./../how-to-guides/scoped-vector-memory-search) — operating the index
+- [API reference](./api/digital-twins/GetDigitalTwin) — the HTTP surface these methods wrap

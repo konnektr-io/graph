@@ -110,37 +110,6 @@ Permissions are either embedded in the token your identity provider issues, or f
 | `models/read` | Read DTDL models |
 | `models/write` | Create and update models |
 | `query/read` | Execute Cypher queries |
-| `mcp/*` | Access MCP tools (for AI assistants) |
-
-### MCP Server Authentication
-
-When using the MCP Server for AI assistants, you need both an OAuth scope and permission:
-
-- **OAuth Scope**: `mcp:tools` (protocol-level access)
-- **Permission**: `mcp/*` (application-level access)
-
-Configure your MCP client with your credentials:
-
-```json
-{
-  "mcpServers": {
-    "konnektr-graph": {
-      "url": "http://<your-mcp-host>/mcp?resource_id=<resource-id>",
-      "transport": {
-        "type": "sse"
-      },
-      "auth": {
-        "type": "oauth2",
-        "token_url": "https://auth.example.com/oauth/token",
-        "client_id": "YOUR_CLIENT_ID",
-        "client_secret": "YOUR_CLIENT_SECRET",
-        "audience": "api://konnektr-graph",
-        "scope": "mcp:tools"
-      }
-    }
-  }
-}
-```
 
 ## Identity Provider Configuration
 
@@ -175,31 +144,6 @@ Authorization__Provider=Claims
 Authorization__PermissionsClaimName=permissions
 ```
 
-**MCP Server:**
-
-```bash
-# Enable authentication
-Authentication__Enabled=true
-Authentication__Authority=https://auth.example.com
-Authentication__Audience=api://konnektr-graph
-Authentication__Issuer=https://auth.example.com/
-
-# Enable authorization with MCP scopes
-Authorization__Enabled=true
-Authorization__Provider=Claims
-Authorization__PermissionsClaimName=permissions
-Authorization__RequiredScopes__0=mcp:tools
-
-# User ID header delegation (optional - proxy scenario)
-Parameters__UserIdHeaderName=X-User-Id
-Parameters__UserIdHeaderRequired=false
-
-# MCP metadata
-MCP__ServerName=My Graph MCP Server
-MCP__Version=1.0.0
-MCP__ResourceServerUrl=http://<your-mcp-host>
-```
-
 ### JWT Token Requirements
 
 Your OAuth provider must issue JWT tokens with these claims:
@@ -209,11 +153,11 @@ Your OAuth provider must issue JWT tokens with these claims:
   "sub": "user-or-service-account-id",
   "aud": "api://konnektr-graph",
   "iss": "https://auth.example.com/",
-  "scope": "mcp:tools",
+  "scope": "digitaltwins:read",
   "permissions": [
     "digitaltwins/read",
     "digitaltwins/write",
-    "mcp/*"
+    "digitaltwins/read"
   ]
 }
 ```
@@ -224,7 +168,7 @@ Your OAuth provider must issue JWT tokens with these claims:
 - `iss` - Issuer (must match your configured issuer)
 
 **Optional but Recommended:**
-- `scope` - OAuth scopes (required for MCP: `mcp:tools`)
+- `scope` - OAuth scopes required by your API (e.g. `digitaltwins:read`)
 - `permissions` - Array of permission strings
 
 ### Permission Providers
@@ -314,7 +258,7 @@ See [Security](/docs/graph/advanced-topics/security) for details.
    - Note the Client ID and Secret
 
 3. **Add Permissions** (in API settings)
-   - Add each permission as a scope (e.g., `digitaltwins:read`, `mcp:tools`)
+   - Add each permission as a scope (e.g., `digitaltwins:read`, `models/read`)
 
 4. **Configure Rules** (optional)
    - Add custom claims to include permissions array
@@ -338,7 +282,7 @@ See [Security](/docs/graph/advanced-topics/security) for details.
 
 ### OAuth Discovery
 
-Both API Service and MCP Server expose an OAuth discovery endpoint at:
+The API service exposes an OAuth discovery endpoint at:
 
 ```
 /.well-known/oauth-protected-resource
@@ -350,7 +294,7 @@ This endpoint returns RFC 9728 Protected Resource Metadata:
 {
   "resource": "https://your-server.com",
   "authorization_servers": ["https://auth.example.com"],
-  "scopes_supported": ["mcp:tools", "mcp:resources"],
+  "scopes_supported": ["digitaltwins:read", "digitaltwins:write"],
   "bearer_methods_supported": ["header"]
 }
 ```
@@ -373,7 +317,7 @@ Returned when no valid JWT token is provided:
 
 **HTTP Headers:**
 ```
-WWW-Authenticate: Bearer realm="mcp", resource_metadata="https://..."
+WWW-Authenticate: Bearer realm="graph", resource_metadata="https://..."
 ```
 
 **Common Causes:**
@@ -384,15 +328,15 @@ WWW-Authenticate: Bearer realm="mcp", resource_metadata="https://..."
 
 **Solution:** Get a fresh access token from your OAuth provider.
 
-### 403 Forbidden - Missing Scope (MCP Only)
+### 403 Forbidden - Missing Scope
 
 Returned when OAuth scope is missing:
 
 ```json
 {
   "error": "insufficient_scope",
-  "error_description": "Required scopes: mcp:tools",
-  "scope": "mcp:tools"
+  "error_description": "Required scopes: digitaltwins:read",
+  "scope": "digitaltwins:read"
 }
 ```
 
@@ -475,19 +419,6 @@ Solution:
 2. Verify permissions are in the token
 3. Check logs for permission provider errors
 
-**Issue: MCP client can't connect**
-
-Possible causes:
-- Wrong OAuth configuration
-- Missing `mcp:tools` scope
-- Network/firewall issues
-
-Solution:
-1. Verify OAuth endpoint URLs
-2. Check client credentials
-3. Ensure `mcp:tools` scope is requested and granted
-4. Test OAuth flow manually with curl
-
 ### Enabling Debug Logging
 
 **Enable verbose authentication logging:**
@@ -537,6 +468,5 @@ This logs:
 
 ## Further Reading
 
-- [MCP OAuth Specification](https://spec.modelcontextprotocol.io/specification/2024-11-05/security/) - MCP security requirements
 - [RFC 9728: Protected Resource Metadata](https://www.rfc-editor.org/rfc/rfc9728.html) - OAuth discovery standard
 - [OAuth 2.1 Specification](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-10) - Latest OAuth standard
