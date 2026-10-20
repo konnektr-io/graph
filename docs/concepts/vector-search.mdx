@@ -1,0 +1,161 @@
+---
+title: Vector search
+icon: Search
+description: Store embeddings as twin properties and rank them with pgvector — hybrid twin search, model search, and scope-enforced memory search.
+---
+
+Konnektr Graph can store embeddings as ordinary twin properties and rank twins by
+similarity using [pgvector](https://github.com/pgvector/pgvector). Because twins, models and
+their embeddings live in one database, a similarity query can be *filtered by your own
+predicates* before ranking — which is what makes it usable for retrieval, not just demos.
+
+There are three search surfaces, and one index that all of them share.
+
+| Surface | Endpoint | Ranked by | Filters |
+|---|---|---|---|
+| Twin search | `POST /digitaltwins/search` | vector | `modelFilter` |
+| Model search | `POST /models/search` | lexical and/or vector | — |
+| Memory search | `POST /digitaltwins/memory-search` | vector | model allow-list, property equality, related twin |
+
+## Storing an embedding
+
+An embedding is just a property with a numeric array value. There is nothing to declare in
+the model beyond the property:
+
+```json
+{
+  "$metadata": { "$model": "dtmi:example:MemoryRecord;1" },
+  "$dtId": "record-1",
+  "environmentId": "env-1",
+  "userId": "user-9",
+  "excerpt": "the text this vector represents",
+  "embedding": [0.11, -0.02, 0.58]
+}
+```
+
+You compute the vectors — Konnektr Graph does not call an embedding model. Whatever produces
+them (OpenAI, a local model, your own encoder) must always produce the **same dimension**,
+because the index is built for one dimension per property.
+
+## The index
+
+Ranking needs an HNSW index on the embedding property:
+
+```bash
+curl -X POST http://localhost:8080/digitaltwins/memory-search/index \
+  -H 'Content-Type: application/json' \
+  -d '{"embeddingProperty": "embedding", "dimension": 768}'
+```
+
+- **Idempotent** — creating it twice is a no-op, so it is safe to run at deploy time.
+- `dimension` must match the stored vectors; a mismatch is rejected rather than silently
+  producing garbage rankings.
+- Optional HNSW tuning: `m` (graph connectivity) and `efConstruction` (build-time search
+  width). Leave them at the defaults until you have measured a problem.
+
+Twins **without** a stored embedding never consume `limit` slots — an incomplete backfill
+degrades recall, not correctness of the returned count.
+
+## Is pgvector available?
+
+```bash
+curl http://localhost:8080/digitaltwins/memory-search/capability
+# {"vectorSearchAvailable": true}
+```
+
+The extension ships with the chart-managed database image, but not with every PostgreSQL
+image. When it is missing, memory search returns **503** rather than silently returning
+unfiltered results — the capability probe exists so callers can fall back to lexical search
+instead of guessing.
+
+You need `CREATE EXTENSION vector;` on an external database.
+
+## Twin search
+
+Nearest neighbours over all twins, optionally restricted to one model:
+
+```bash
+curl -X POST http://localhost:8080/digitaltwins/search \
+  -H 'Content-Type: application/json' \
+  -d '{
+        "vector": [0.11, -0.02, 0.58],
+        "embeddingProperty": "embedding",
+        "modelFilter": "dtmi:example:Room;1",
+        "limit": 10
+      }'
+```
+
+`embeddingProperty` defaults to `embedding`.
+
+## Model search
+
+Models can be found by text, by vector, or both:
+
+```bash
+curl -X POST http://localhost:8080/models/search \
+  -H 'Content-Type: application/json' \
+  -d '{"query": "temperature sensor", "limit": 5}'
+```
+
+This is the one surface that accepts text, because DTDL models carry `displayName` and
+`description` worth matching lexically. On the SDK side it is `client.search_models(...)`,
+which also takes a `vector=` for semantic model lookup.
+
+## Memory search: scope before rank
+
+Memory search is the surface built for multi-tenant and agent workloads. Its contract is the
+reason it exists as a separate endpoint:
+
+> Scope predicates are applied **in the database** before nearest-neighbour ranking and
+> `limit`. Out-of-scope rows never enter the ranking, so they cannot appear — and cannot
+> influence the ranking of rows that do.
+
+```bash
+curl -X POST http://localhost:8080/digitaltwins/memory-search \
+  -H 'Content-Type: application/json' \
+  -d '{
+        "vector": [0.11, -0.02, 0.58],
+        "limit": 5,
+        "modelIds": ["dtmi:example:MemoryRecord;1"],
+        "propertyFilters": {"environmentId": "env-1", "userId": "user-9"},
+        "relatedTwinId": "session-9",
+        "expectedDimension": 768
+      }'
+```
+
+| Field | Meaning |
+|---|---|
+| `modelIds` | Allow-list of model ids — anything else is excluded |
+| `propertyFilters` | Equality filters on twin properties (scope attributes you manage) |
+| `relatedTwinId` | Only twins connected to this twin |
+| `expectedDimension` | Reject rather than compare vectors of the wrong size |
+| `excerptLength` | Truncate the returned excerpt |
+
+Each result carries its `distance`, so callers can apply their own cut-off.
+
+**Never filter broad search results locally to enforce access.** That pattern leaks the
+existence of out-of-scope records and ranks them against the caller's query. Use this
+endpoint, which applies the scope first.
+
+## Choosing a surface
+
+- **"What is near this vector?"** over one model → twin search.
+- **"Which model describes X?"** → model search.
+- **"What is near this vector *for this environment/user/session*?"** → memory search.
+
+## Limits worth knowing
+
+- Ranking is nearest-neighbour over the indexed property; keep one embedding property per
+  semantic space rather than mixing dimensions in one.
+- The database does the ranking, so index build time and query cost scale with twin count,
+  not with your application's memory.
+- Embeddings are ordinary properties: they are returned by normal reads too. If they are
+  large, read twins with projections (`SELECT $dtId, excerpt FROM DIGITALTWINS ...`) instead
+  of `SELECT *`.
+
+## See also
+
+- [Scoped vector memory search](../how-to-guides/scoped-vector-memory-search) — operating the index and backfilling
+- [API reference: memory search](./../reference/api/digital-twins/MemorySearch)
+- [Python SDK](./../reference/python-sdk) — `search_twins`, `search_models`, `search_memory`
+- [Querying](./querying) — the ADT query dialect and raw Cypher
