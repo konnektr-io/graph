@@ -5,6 +5,7 @@
     "pages": [
         "dtdl",
         "querying",
+        "vector-search",
         "validation",
         "event-routing",
         "telemetry",
