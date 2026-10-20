@@ -11,6 +11,7 @@ namespace AgeDigitalTwins.Test;
 /// nearest-neighbour ranking and LIMIT, so out-of-scope records can never appear.
 /// These tests require a pgvector-enabled image (see CnpgOnlyFact).
 /// </summary>
+[Trait("Category", "Integration")]
 public class MemorySearchTests : TestBase
 {
     private const string RecordModelId = "dtmi:test:memoryrecord;1";
