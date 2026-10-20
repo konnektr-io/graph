@@ -1,9 +1,8 @@
 {
     "title": "Deployment & Installation",
     "icon": "Download",
-    "description": "Deploy Konnektr Graph in various environments",
+    "description": "Deploy Konnektr Graph on your own infrastructure",
     "pages": [
-        "hosted-konnektr",
         "comparison",
         "self-host",
         "performance"

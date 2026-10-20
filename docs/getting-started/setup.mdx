@@ -1,98 +1,159 @@
 ---
 title: Setup
 icon: Settings
+description: Configure a self-hosted Konnektr Graph instance — authentication, event sinks, database and scaling.
 ---
 
-This guide walks you through setting up Konnektr Graph in our hosted environment via KtrlPlane.
+This page covers the configuration you will change after deploying the chart. For cluster
+requirements and the install command, start with
+[Self-hosted deployment](../deployment-installation/self-host).
 
-## Prerequisites
+All settings live in the chart's `values.yaml` under `api`, `events` and `cluster`.
 
-- A Konnektr account at [ktrlplane.konnektr.io](https://ktrlplane.konnektr.io)
-- An organization and project set up in KtrlPlane
+## Authentication
 
-## Creating a Graph Resource
+Authentication is **off by default**. Turn it on before exposing the API.
 
-### 1. Access Resource Creation
+### Option 1: OIDC / JWT
 
-1. Log into your Konnektr dashboard
-2. Navigate to your organization
-3. Select or create a project
-4. Click "Create Resource"
-5. Choose "Konnektr Graph"
+Any OpenID Connect provider works — Microsoft Entra ID, Keycloak, Auth0, Dex:
 
-### 2. Basic Configuration
+```yaml
+api:
+  config:
+    authentication:
+      enabled: true
+      metadataAddress: https://login.microsoftonline.com/<tenant-id>/v2.0/.well-known/openid-configuration
+      audience: api://konnektr-graph
+      issuer: https://sts.windows.net/<tenant-id>/
+```
 
-**Resource Name**: Choose a unique name for your graph instance. This will be part of your API endpoint.
+`metadataAddress` is the provider's discovery document. The API validates the signature,
+`aud` and `iss` of every bearer token against it.
 
-### 3. Event Sinks (Optional)
+> If you previously ran the managed Konnektr service, the identity-provider values shipped
+> in older chart versions point at it and are inert while authentication is disabled.
+> Replace all three values with your own provider.
 
-Configure external systems to receive real-time events from your digital twins:
+### Option 2: API keys
 
-#### Kafka Sink
-Stream events to Apache Kafka with federated credentials:
-- **Name**: Unique identifier for this sink
-- **Broker List**: Comma-separated list of Kafka brokers
-- **Topic**: Target Kafka topic
-- **SASL Mechanism**: Uses OAUTHBEARER with federated credentials
+For service-to-service calls without an identity provider:
 
-#### Kusto Sink  
-Stream events to Azure Data Explorer (Kusto) or Microsoft Fabric:
-- **Name**: Unique identifier for this sink
-- **Ingestion URI**: ADX cluster ingestion endpoint
-- **Database**: Target database name
+```yaml
+api:
+  config:
+    authentication:
+      enabled: true
+    # keys are compared in constant time; rotate by listing the new one first
+```
 
-### 4. Event Routes (Optional)
+See [Configuration reference](../reference/configuration) for the exact key names and the
+`Parameters:` overrides that the API reads at startup.
 
-Define which events go to which sinks:
+## Event sinks and routes
 
-- **Sink Name**: Select from configured sinks
-- **Event Format**: 
-  - `EventNotification`: Real-time twin state changes
-  - `DataHistory`: Historical data format compatible with Azure Digital Twins
+Events are produced by the Events service, not the API. Enable it and declare where events
+go, then which event formats are routed to which sink:
 
-### 5. Deploy Your Graph
+```yaml
+events:
+  enabled: true
+  config:
+    eventSinks:
+      kafka:
+        - name: KafkaSink1
+          brokerList: "kafka-0:9092,kafka-1:9092"
+          topic: "twin-events"
+          saslMechanism: PLAIN
+          saslUsername: "graph"
+      kusto:
+        - name: AdxSink1
+          ingestionUri: "https://<cluster>.<region>.kusto.windows.net"
+          database: "graph"
+      mqtt: []
+    eventRoutes:
+      - sinkName: KafkaSink1
+        eventFormat: EventNotification
+      - sinkName: AdxSink1
+        eventFormat: DataHistory
+```
 
-Click "Create Resource" to deploy your graph. The system will:
+- `EventNotification` — real-time twin create/update/delete and relationship changes.
+- `DataHistory` — the historical format compatible with Azure Digital Twins data history.
 
-1. Provision your graph database
-2. Configure Apache AGE with PostgreSQL
-3. Set up event routing infrastructure
-4. Generate your unique API endpoint
+Secrets (SASL passwords, connection strings) belong in a Kubernetes Secret, injected via
+`extraEnv`, not in `values.yaml`:
 
-## Resource Endpoints
+```yaml
+events:
+  extraEnv:
+    - name: EventSinks__Kafka__0__SaslPassword
+      valueFrom:
+        secretKeyRef:
+          name: kafka-sasl-password
+          key: password
+```
 
-Once deployed, you'll have access to:
+## Database
 
-- **API Endpoint**: `https://your-graph-name.api.graph.konnektr.io`
-- **Authentication**: Auth0 with audience `https://api.graph.konnektr.io`
-- **Documentation**: Swagger UI available at your endpoint
+The chart can create its own PostgreSQL cluster (CloudNativePG) or connect to one you
+operate.
 
-## Authentication Setup
+```yaml
+cluster:
+  enabled: true
+  type: postgresql
+  version:
+    major: 18
+    age: "1.7.0"
+  cluster:
+    instances: 1
+    storage:
+      size: 5Gi
+```
 
-Your graph uses Auth0 for authentication. You'll need to:
+Requirements for an external database:
 
-1. Get your Auth0 domain: `auth.konnektr.io`
-2. Use audience: `https://api.graph.konnektr.io`
-3. Implement a custom TokenCredential for Azure SDKs
+- PostgreSQL 16, 17 or 18 with the **Apache AGE** extension installed
+- `pgvector` if you want [scoped vector memory search](../how-to-guides/scoped-vector-memory-search)
+- the extensions created and the graph initialised (the API does the latter on first use)
 
-See [First Steps](./first-steps) for detailed authentication examples.
+If you run a **single-instance** cluster, leave `api.database.readOnlyHost: auto` (the
+default). It avoids advertising the CloudNativePG read-only service when no replica can
+exist — on some CNIs connections to that service hang instead of failing.
 
-## Resource Management
+## Scaling
 
-From your KtrlPlane dashboard, you can:
+```yaml
+api:
+  replicaCount: 2
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+```
 
-- **Monitor**: View resource health and metrics
-- **Configure**: Update event sinks and routes
-- **Scale**: Adjust resource allocation
-- **Logs**: Access application logs and diagnostics
-- **Delete**: Remove the resource when no longer needed
+The API is stateless; scale it horizontally. Query throughput is bounded by PostgreSQL, so
+size the database before adding replicas. `api.config.parameters` carries the pool and
+rate-limit knobs (`maxPoolSize`, `connectionTimeout`, `rateLimitingEnabled`,
+`maxQueryComplexityPerWindow`).
 
-## Next Steps
+## Observability
 
-- [First Steps](./first-steps) - Connect and authenticate
-- [Using Azure SDKs](../how-to-guides/using-azure-digital-twins-sdks) - SDK integration examples
+```yaml
+api:
+  logLevel: Information          # Error | Warning | Information | Debug | Trace
+  openTelemetry:
+    enabled: true
+    exporterEndpoint: http://otel-collector.opentelemetry.svc.cluster.local:4317
+```
 
-### Deployment Alternatives
+The API exposes `/health` for probes and Prometheus-format metrics. The chart's probes
+already point at `/health`; wire `openTelemetry` to your collector for traces.
 
-- **Self-Hosted Option**: For full control and direct database access, see our [self-hosted deployment guide](../deployment-installation/self-host)
-- **Performance Optimization**: Self-hosted users can access [advanced performance tuning](../deployment-installation/performance)
+## Next steps
+
+- [Event routing](../concepts/event-routing) — the event model in detail
+- [Configuration reference](../reference/configuration) — every setting the API reads
+- [Performance](../advanced-topics/performance) — tuning queries and pooling
+- [Native SDK](../reference/sdk) — talk to PostgreSQL directly, without HTTP

@@ -11,9 +11,13 @@ This repository is an open-source, drop-in replacement for Azure Digital Twins, 
 - **Follow SOLID principles and idiomatic C#/.NET practices.**
 - **Maintain separation of concerns:** Each module/class should have a single responsibility. Avoid cross-cutting logic unless explicitly required.
 - **Decoupled architecture:** Do not introduce direct dependencies on other platform applications. All interactions should use well-defined APIs (REST/gRPC) or asynchronous messaging (Dapr).
-- **Centralized IAM:** All authentication/authorization must validate tokens from the Control Plane (KtrlPlane). Do not implement custom user tables or authentication logic.
+- **Centralized IAM:** Authentication validates JWTs from the configured OIDC provider
+  (`api.config.authentication`). Authorization can optionally delegate to an external
+  permissions API (`api.config.authorization`). Do not implement custom user tables.
 - **Error handling:** Use consistent error handling patterns. Surface errors clearly in API responses and logs.
-- **Naming conventions:** Use `AgeDigitalTwins` for open-source code, but reference `Konnektr Graph` in documentation and comments where relevant for commercial/hosted context.
+- **Naming conventions:** Use `AgeDigitalTwins` for namespaces, classes and the published
+  package id (backwards compatibility is a hard requirement), and `Konnektr Graph` for the
+  product name in documentation and comments. The repository is `konnektr-io/graph`.
 
 ---
 
@@ -23,12 +27,10 @@ This repository is an open-source, drop-in replacement for Azure Digital Twins, 
   - Update the `docs/` folder with every feature, change, or fix.
   - Ensure code comments and public APIs are documented (XML comments for C#).
   - Update the README.md and any relevant guides when APIs or features change.
-  - For user-facing docs, ensure changes are reflected in the Konnektr Docs site (docs.konnektr.com) via PRs or automated workflows.
+  - For user-facing docs, ensure changes are reflected in the Konnektr Docs site (docs.konnektr.io) via PRs or automated workflows.
 - **Platform boundaries:**
   - Reference `.github/PLATFORM_SCOPE.md` for architectural boundaries and scope enforcement.
   - Do not document features or APIs outside the scope of this application.
-- **Commercial branding:**
-  - When documenting features that are part of the hosted/commercial offering, clarify the distinction between open-source and commercial features.
 
 ---
 
@@ -67,17 +69,20 @@ This repository is an open-source, drop-in replacement for Azure Digital Twins, 
 - **Open source contributions:**
   - Follow the guidelines in CONTRIBUTING.md (if present).
   - All contributions must adhere to the architectural boundaries and quality standards outlined above.
-- **Commercialization:**
-  - When contributing features intended for the hosted Konnektr Graph, ensure they do not break open-source compatibility.
-  - Clearly document any commercial-only features or configuration.
+- **Compatibility:**
+  - Konnektr Graph is self-hosted and open source. There is no commercial edition to
+    keep in sync; anything a contributor adds ships to every deployment.
 
 ---
 
 ## 6. Branding & Naming
 
-- **Code:** Use `AgeDigitalTwins` for namespaces, classes, and package names.
-- **Docs/Comments:** Reference `Konnektr Graph` where appropriate to clarify commercial context.
-- **README/Docs:** Clearly state the dual branding and intended use cases.
+- **Code:** Use `AgeDigitalTwins` for namespaces, classes and the NuGet package id — this is
+  a public API surface and renaming it breaks consumers.
+- **Product:** `Konnektr Graph` in documentation, README and comments.
+- **Repository:** `konnektr-io/graph`; container images `graph-api` / `graph-events`.
+- **Vocabulary:** the product is a semantic graph for PostgreSQL. "Digital twin" describes
+  the Azure compatibility profile and one class of use case, not the data model.
 
 ---
 
