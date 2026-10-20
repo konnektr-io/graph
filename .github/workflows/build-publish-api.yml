@@ -36,4 +36,10 @@ jobs:
           file: ./src/AgeDigitalTwins.ApiService/Dockerfile
           push: true
           load: true
-          tags: ghcr.io/${{ github.repository }}/agedigitaltwins-api:${{github.event.release.tag_name && env.VERSION}}
+          # Canonical image path matches the repo name (konnektr-io/graph). The legacy
+          # path is kept as a second tag for one transition window so deployments pinned
+          # to the old chart 0.14.x keep receiving patch releases without a chart bump.
+          # TODO(graph-1.31): drop the legacy tag once no consumer pulls the old path.
+          tags: |
+            ghcr.io/konnektr-io/graph/graph-api:${{ env.VERSION }}
+            ghcr.io/konnektr-io/pg-age-digitaltwins/agedigitaltwins-api:${{ env.VERSION }}
